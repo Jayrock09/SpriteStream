@@ -31,6 +31,8 @@ public final class BaseAtlasLoader {
 
 	private static volatile Map<Identifier, Source> sources = new ConcurrentHashMap<>();
 	private static volatile boolean activeForCurrentLoad;
+	/** Whether to shrink Iris's PBR maps during this load (Iris with our hooks is installed). */
+	private static volatile boolean preparePbrForCurrentLoad;
 
 	private BaseAtlasLoader() {
 	}
@@ -38,7 +40,12 @@ public final class BaseAtlasLoader {
 	/** Called when the block atlas starts loading; clears the previous reload's sources. */
 	public static void beginLoad() {
 		sources = new ConcurrentHashMap<>();
+		IrisPbrPrefetch.clear();
 		activeForCurrentLoad = SpriteStreamMod.shouldStream();
+		preparePbrForCurrentLoad = activeForCurrentLoad
+			&& SpriteStreamMod.config.preparePbrMapsAtLoad
+			&& IrisCompat.isSupported()
+			&& IrisCompat.hooksPresent();
 		if (!activeForCurrentLoad) {
 			SpriteStreamMod.LOGGER.info("[SpriteStream] Streaming disabled for this reload (needs Sodium)");
 		}
@@ -133,6 +140,11 @@ public final class BaseAtlasLoader {
 		}
 		NativeImage base = ImageOps.shrinkTo(image, cap);
 		image.close();
+		if (recordSource && preparePbrForCurrentLoad) {
+			IrisPbrPrefetch.cacheDuringLoad(
+				spriteLocation, resource, base.getWidth(), base.getHeight(), net.minecraft.client.Minecraft.getInstance().getResourceManager()
+			);
+		}
 		return new SpriteContents(
 			spriteLocation, new FrameSize(base.getWidth(), base.getHeight()), base, animationInfo, additionalMetadata, textureInfo
 		);

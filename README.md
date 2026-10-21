@@ -37,6 +37,7 @@ Alpha Piscium.
 | `uploadMiBPerFrame` | 24 | Upload budget per frame |
 | `evictDelaySeconds` | 3.0 | How long a texture keeps its resolution after it stops being needed |
 | `fadeSeconds` | 0.25 | Fade-in time for upgrades |
+| `preparePbrMapsAtLoad` | true | With Iris, shrink `_n`/`_s` maps while the pack loads so turning shaders on does not stall the game |
 
 ## Known limits
 
@@ -48,7 +49,8 @@ Alpha Piscium.
 - Turning a shader pack on or off rebuilds the pool once (it adds or drops the normal/specular planes).
 - Connected-texture variants from Continuity are not requested by the probe, so they stay at base resolution.
 - Block items in hand and GUI, and entity textures, are not streamed.
-- The whole pack is still decoded once at load to build the base atlas.
+- The whole pack is still decoded once at load to build the base atlas (with Iris, the `_n`/`_s` maps too, so
+  that Iris's PBR atlas build is instant later). Stratum 2048x takes about 45 s on the loading screen.
 
 ## Iris version
 

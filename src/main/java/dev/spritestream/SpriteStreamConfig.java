@@ -36,6 +36,11 @@ public final class SpriteStreamConfig {
 	public float fadeSeconds = 0.25F;
 	/** Background decode threads. */
 	public int decodeThreads = 3;
+	/**
+	 * With Iris installed, shrink the {@code _n}/{@code _s} maps while the resource pack loads, so turning a
+	 * shader pack on does not stall the game while Iris builds its PBR atlases.
+	 */
+	public boolean preparePbrMapsAtLoad = true;
 	/** Write a status line to the log every few seconds. */
 	public boolean logStats = true;
 

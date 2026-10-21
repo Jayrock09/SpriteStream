@@ -33,7 +33,7 @@ public final class SpriteStreamMixinPlugin implements IMixinConfigPlugin {
 	@Override
 	public List<String> getMixins() {
 		if (IrisCompat.isSupported() && IrisCompat.hooksPresent()) {
-			return List.of("iris.IrisSamplersMixin", "iris.TransformPatcherMixin");
+			return List.of("iris.IrisSamplersMixin", "iris.TransformPatcherMixin", "iris.AtlasPBRLoaderMixin");
 		}
 		return null;
 	}
