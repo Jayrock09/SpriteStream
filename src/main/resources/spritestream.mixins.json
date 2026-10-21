@@ -1,0 +1,18 @@
+{
+  "required": true,
+  "package": "dev.spritestream.mixin",
+  "plugin": "dev.spritestream.mixin.SpriteStreamMixinPlugin",
+  "minVersion": "0.8",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "SpriteLoaderMixin",
+    "TextureAtlasMixin",
+    "ShaderConfigsMixin",
+    "GameRendererMixin",
+    "sodium.ShaderChunkRendererMixin",
+    "sodium.DefaultChunkRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

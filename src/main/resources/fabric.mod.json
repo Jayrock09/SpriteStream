@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "spritestream",
+  "version": "${version}",
+  "name": "SpriteStream",
+  "description": "Streams high-resolution block textures on demand. Every block texture is kept at a small base resolution; the textures that actually cover pixels on screen are upgraded to the resolution those pixels need, inside a fixed VRAM budget.",
+  "authors": ["Jayrock09"],
+  "license": "LGPL-3.0-only",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["dev.spritestream.SpriteStreamMod"]
+  },
+  "mixins": ["spritestream.mixins.json"],
+  "accessWidener": "spritestream.accesswidener",
+  "depends": {
+    "fabricloader": ">=0.19.0",
+    "minecraft": "26.3.x",
+    "java": ">=25",
+    "sodium": ">=0.9.0-"
+  }
+}

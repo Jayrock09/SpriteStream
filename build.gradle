@@ -1,0 +1,100 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+	archivesName = project.archives_base_name
+}
+
+// Machine-specific settings (e.g. irisJar) live in local.properties, which is not committed.
+def localProperties = new Properties()
+if (file("local.properties").exists()) {
+	file("local.properties").withInputStream { localProperties.load(it) }
+}
+def irisJar = (project.findProperty("irisJar") ?: localProperties.getProperty("irisJar"))?.toString()?.trim() ?: null
+
+sourceSets {
+	main {
+		java {
+			if (irisJar == null) {
+				exclude "dev/spritestream/mixin/iris/**"
+			}
+		}
+	}
+}
+
+repositories {
+	exclusiveContent {
+		forRepository {
+			maven {
+				name = "Modrinth"
+				url = "https://api.modrinth.com/maven"
+			}
+		}
+		filter {
+			includeGroup "maven.modrinth"
+		}
+	}
+}
+
+loom {
+	accessWidenerPath = file("src/main/resources/spritestream.accesswidener")
+
+	runs {
+		client {
+			// gradlew runClient -PtestWorld="Optimum Realism Test Map" jumps straight into a world in run/saves
+			if (project.hasProperty("testWorld")) {
+				programArgs "--quickPlaySingleplayer", project.property("testWorld").toString(), "--width", "1920", "--height", "1080"
+				vmArg "-Dspritestream.test=true"
+			}
+			// gradlew runClient -Pbaseline measures the game without SpriteStream touching any atlas
+			if (project.hasProperty("baseline")) {
+				vmArg "-Dspritestream.disabled=true"
+			}
+		}
+	}
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	// Sodium owns terrain rendering; we patch its shaders and bind our resources.
+	compileOnly("maven.modrinth:sodium:${project.sodium_version}") { transitive = false }
+	runtimeOnly("maven.modrinth:sodium:${project.sodium_version}") { transitive = false }
+
+	// Iris shader-pack support targets Iris 1.12, which is not on Modrinth yet. Point irisJar (in
+	// local.properties or -PirisJar=...) at a 1.12 jar to build it; without one the Iris hooks are left out.
+	if (irisJar != null) {
+		compileOnly files(irisJar)
+		// gradlew runClient -Piris adds Iris so shader-pack (PBR/POM) streaming can be tested
+		if (project.hasProperty("iris")) {
+			runtimeOnly files(irisJar)
+		}
+	}
+	// Test client only: skips the "experimental settings" warning so quick-play never stalls on it.
+	runtimeOnly("maven.modrinth:yeetus-experimentus:aSzA9PLW") { transitive = false }
+}
+
+processResources {
+	def version = project.version
+	inputs.property "version", version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": version
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.encoding = "UTF-8"
+	it.options.release = 25
+}
+
+java {
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+}

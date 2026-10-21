@@ -1,0 +1,27 @@
+# Gradle / Loom
+.gradle/
+build/
+out/
+classes/
+
+# Dev client (worlds, packs, logs, screenshots)
+run/
+
+# Machine-specific build settings (e.g. path to a local Iris jar)
+local.properties
+
+# IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+bin/
+
+# OS
+.DS_Store
+Thumbs.db
+*.bak
