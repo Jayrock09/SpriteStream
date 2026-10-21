@@ -127,7 +127,8 @@ final class TestHarness {
 					for (int z = 1; z <= 2; z++) {
 						level.setBlock(base.offset(x, y, z), air, 3);
 					}
-					BlockState wall = x < 0 ? Blocks.BRICKS.defaultBlockState() : Blocks.JUNGLE_LOG.defaultBlockState();
+					BlockState wall = x < -4 ? Blocks.STONE_BRICKS.defaultBlockState()
+						: x < 0 ? Blocks.BRICKS.defaultBlockState() : Blocks.JUNGLE_LOG.defaultBlockState();
 					level.setBlock(base.offset(x, y - 1, 3), wall, 3);
 				}
 			}

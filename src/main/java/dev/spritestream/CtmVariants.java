@@ -27,6 +27,9 @@ import net.minecraft.world.level.block.Block;
 public final class CtmVariants {
 	private final Map<StreamedSprite, StreamedSprite[]> byBaseSprite = new IdentityHashMap<>();
 	private final Map<Block, StreamedSprite[]> byBlock = new IdentityHashMap<>();
+	/** Overlay tiles (grass/sand edges drawn on top of neighbouring blocks), kept apart so they can rank lower. */
+	private final Map<StreamedSprite, StreamedSprite[]> overlaysByBaseSprite = new IdentityHashMap<>();
+	private final Map<Block, StreamedSprite[]> overlaysByBlock = new IdentityHashMap<>();
 	private int ruleCount;
 
 	private CtmVariants() {
@@ -40,6 +43,8 @@ public final class CtmVariants {
 		CtmVariants variants = new CtmVariants();
 		Map<StreamedSprite, Set<StreamedSprite>> baseLinks = new IdentityHashMap<>();
 		Map<Block, Set<StreamedSprite>> blockLinks = new IdentityHashMap<>();
+		Map<StreamedSprite, Set<StreamedSprite>> overlayBaseLinks = new IdentityHashMap<>();
+		Map<Block, Set<StreamedSprite>> overlayBlockLinks = new IdentityHashMap<>();
 
 		Map<Identifier, Resource> files = resources.listResources("optifine/ctm", id -> id.getPath().endsWith(".properties"));
 		for (Map.Entry<Identifier, Resource> file : files.entrySet()) {
@@ -55,6 +60,10 @@ public final class CtmVariants {
 			List<StreamedSprite> tiles = new ArrayList<>();
 			for (Identifier tile : parseTiles(location.getNamespace(), directory, properties.getProperty("tiles", ""))) {
 				StreamedSprite sprite = spritesByName.get(tile);
+				if (sprite == null && tile.getPath().startsWith("optifine/")) {
+					// Continuity registers OptiFine-format tiles under its own prefix in the atlas.
+					sprite = spritesByName.get(tile.withPath("continuity_reserved/" + tile.getPath().substring("optifine/".length())));
+				}
 				if (sprite != null) {
 					tiles.add(sprite);
 				}
@@ -63,29 +72,50 @@ public final class CtmVariants {
 				continue;
 			}
 			variants.ruleCount++;
+			boolean overlay = properties.getProperty("method", "").trim().startsWith("overlay");
+			Map<StreamedSprite, Set<StreamedSprite>> toBase = overlay ? overlayBaseLinks : baseLinks;
+			Map<Block, Set<StreamedSprite>> toBlock = overlay ? overlayBlockLinks : blockLinks;
 
 			for (String tile : split(properties.getProperty("matchTiles", ""))) {
 				StreamedSprite base = spritesByName.get(textureId(location.getNamespace(), tile));
 				if (base != null) {
-					baseLinks.computeIfAbsent(base, k -> new LinkedHashSet<>()).addAll(tiles);
+					toBase.computeIfAbsent(base, k -> new LinkedHashSet<>()).addAll(tiles);
 				}
 			}
 			for (String entry : split(properties.getProperty("matchBlocks", ""))) {
 				Block block = blockFor(entry);
 				if (block != null) {
-					blockLinks.computeIfAbsent(block, k -> new LinkedHashSet<>()).addAll(tiles);
+					toBlock.computeIfAbsent(block, k -> new LinkedHashSet<>()).addAll(tiles);
 				}
 			}
 		}
 
-		baseLinks.forEach((base, set) -> {
-			set.remove(base);
+		freeze(baseLinks, variants.byBaseSprite, true);
+		freeze(blockLinks, variants.byBlock, false);
+		freeze(overlayBaseLinks, variants.overlaysByBaseSprite, true);
+		freeze(overlayBlockLinks, variants.overlaysByBlock, false);
+		return variants;
+	}
+
+	private static <K> void freeze(final Map<K, Set<StreamedSprite>> links, final Map<K, StreamedSprite[]> into, final boolean dropSelf) {
+		links.forEach((key, set) -> {
+			if (dropSelf) {
+				set.remove(key);
+			}
 			if (!set.isEmpty()) {
-				variants.byBaseSprite.put(base, set.toArray(new StreamedSprite[0]));
+				into.put(key, set.toArray(new StreamedSprite[0]));
 			}
 		});
-		blockLinks.forEach((block, set) -> variants.byBlock.put(block, set.toArray(new StreamedSprite[0])));
-		return variants;
+	}
+
+	/** Overlay tiles that can be drawn over {@code base}, or an empty array. */
+	public StreamedSprite[] overlaysForSprite(final StreamedSprite base) {
+		return this.overlaysByBaseSprite.getOrDefault(base, NONE);
+	}
+
+	/** Overlay tiles that can be drawn over {@code block}, or an empty array. */
+	public StreamedSprite[] overlaysForBlock(final Block block) {
+		return this.overlaysByBlock.getOrDefault(block, NONE);
 	}
 
 	/** Variants that stand in for {@code base} somewhere in the world, or an empty array. */
@@ -106,6 +136,8 @@ public final class CtmVariants {
 		Set<StreamedSprite> all = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
 		this.byBaseSprite.values().forEach(a -> all.addAll(List.of(a)));
 		this.byBlock.values().forEach(a -> all.addAll(List.of(a)));
+		this.overlaysByBaseSprite.values().forEach(a -> all.addAll(List.of(a)));
+		this.overlaysByBlock.values().forEach(a -> all.addAll(List.of(a)));
 		return all.size();
 	}
 

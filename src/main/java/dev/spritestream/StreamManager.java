@@ -164,6 +164,16 @@ public final class StreamManager {
 			byName.put(this.sprites[i].name, this.sprites[i]);
 		}
 		this.ctm = CtmVariants.load(resources, byName);
+		if (SpriteStreamMod.DEBUG.contains("ctmlog")) {
+			for (int i = 1; i < this.sprites.length; i++) {
+				StreamedSprite s = this.sprites[i];
+				StreamedSprite[] variants = this.ctm.forSprite(s);
+				if (variants.length > 0 && s.name.getPath().contains("brick")) {
+					SpriteStreamMod.LOGGER.info("[SpriteStream] CTM {} -> {}", s.name, java.util.Arrays.stream(variants).map(v -> v.name.toString()).toList());
+				}
+			}
+			byName.keySet().stream().filter(n -> n.getPath().contains("stone_bricks")).sorted().forEach(n -> SpriteStreamMod.LOGGER.info("[SpriteStream] streamable {}", n));
+		}
 		if (this.ctm.ruleCount() > 0) {
 			SpriteStreamMod.LOGGER.info(
 				"[SpriteStream] {} connected/random texture rules link {} variant textures to their blocks",
@@ -403,11 +413,17 @@ public final class StreamManager {
 						for (StreamedSprite variant : this.ctm.forSprite(s)) {
 							want(variant, texelsPerBlock);
 						}
+						for (StreamedSprite overlay : this.ctm.overlaysForSprite(s)) {
+							wantOverlay(overlay, texelsPerBlock);
+						}
 					}
 				}
 				// Connected/random textures replace the model's sprite when the chunk is built.
 				for (StreamedSprite variant : this.ctm.forBlock(state.getBlock())) {
 					want(variant, texelsPerBlock);
+				}
+				for (StreamedSprite overlay : this.ctm.overlaysForBlock(state.getBlock())) {
+					wantOverlay(overlay, texelsPerBlock);
 				}
 			});
 
@@ -437,6 +453,17 @@ public final class StreamManager {
 			s.wantCurrent = texelsPerBlock;
 		}
 		s.hitsCurrent++;
+	}
+
+	/**
+	 * Overlay tiles (grass/sand edges) only show next to certain neighbours and are thin, partly transparent
+	 * strips, so they get one resolution step less and no ranking weight.
+	 */
+	private static void wantOverlay(final StreamedSprite s, final float texelsPerBlock) {
+		float half = texelsPerBlock * 0.5F;
+		if (half > s.wantCurrent) {
+			s.wantCurrent = half;
+		}
 	}
 
 	private int targetResolution(final StreamedSprite s) {
