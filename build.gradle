@@ -50,6 +50,10 @@ loom {
 				programArgs "--quickPlaySingleplayer", project.property("testWorld").toString(), "--width", "1920", "--height", "1080"
 				vmArg "-Dspritestream.test=true"
 			}
+			// gradlew runClient -PssDebug=aniso1,coloronly turns on debug switches (see SpriteStreamMod.DEBUG)
+			if (project.hasProperty("ssDebug")) {
+				vmArg "-Dspritestream.debug=" + project.property("ssDebug")
+			}
 			// gradlew runClient -Pbaseline measures the game without SpriteStream touching any atlas
 			if (project.hasProperty("baseline")) {
 				vmArg "-Dspritestream.disabled=true"
@@ -76,6 +80,8 @@ dependencies {
 			runtimeOnly files(irisJar)
 		}
 	}
+	// Test client only: connected/random textures (OptiFine CTM format), used by packs like Optimum Realism.
+	runtimeOnly("maven.modrinth:continuity:${project.continuity_version}") { transitive = false }
 	// Test client only: skips the "experimental settings" warning so quick-play never stalls on it.
 	runtimeOnly("maven.modrinth:yeetus-experimentus:aSzA9PLW") { transitive = false }
 }

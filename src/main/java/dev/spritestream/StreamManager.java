@@ -76,6 +76,7 @@ public final class StreamManager {
 
 	private StreamedSprite[] sprites = new StreamedSprite[0];
 	private final Map<TextureAtlasSprite, StreamedSprite> byAtlasSprite = new IdentityHashMap<>();
+	private CtmVariants ctm = CtmVariants.empty();
 	private @Nullable PoolPage page;
 	private boolean pbrPlanes;
 	private int generation;
@@ -90,6 +91,7 @@ public final class StreamManager {
 	private int tableRows;
 	private boolean tableDirty;
 	private @Nullable GpuSampler poolSampler;
+	private @Nullable GpuSampler pbrSampler;
 	private @Nullable GpuSampler nearestSampler;
 
 	private long frame;
@@ -157,6 +159,17 @@ public final class StreamManager {
 			this.byAtlasSprite.put(sprite, streamed);
 		}
 		this.sprites = list.toArray(new StreamedSprite[0]);
+		Map<Identifier, StreamedSprite> byName = new java.util.HashMap<>();
+		for (int i = 1; i < this.sprites.length; i++) {
+			byName.put(this.sprites[i].name, this.sprites[i]);
+		}
+		this.ctm = CtmVariants.load(resources, byName);
+		if (this.ctm.ruleCount() > 0) {
+			SpriteStreamMod.LOGGER.info(
+				"[SpriteStream] {} connected/random texture rules link {} variant textures to their blocks",
+				this.ctm.ruleCount(), this.ctm.linkedSprites()
+			);
+		}
 
 		this.buildIdMap(preparations.width(), preparations.height());
 		this.buildTable();
@@ -330,11 +343,16 @@ public final class StreamManager {
 		try (NativeImage zero = new NativeImage(1, 1, true)) {
 			device.createCommandEncoder().writeToTexture(this.dummyTexture, zero);
 		}
-		int anisotropy = Math.max(1, Math.min(16, device.getDeviceInfo().limits().maxAnisotropy()));
+		int anisotropy = SpriteStreamMod.DEBUG.contains("aniso1") ? 1 : Math.max(1, Math.min(16, device.getDeviceInfo().limits().maxAnisotropy()));
 		this.poolSampler = device.createSampler(
 			AddressMode.CLAMP_TO_EDGE, AddressMode.CLAMP_TO_EDGE, FilterMode.LINEAR, FilterMode.LINEAR, anisotropy, OptionalDouble.empty()
 		);
 		this.nearestSampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
+		// LabPBR normal/specular maps hold exact codes (emission 255 = none, metal ids, height); blending two
+		// texels invents values that shaders render as glowing edge lines, so they are read unfiltered, as Iris does.
+		this.pbrSampler = device.createSampler(
+			AddressMode.CLAMP_TO_EDGE, AddressMode.CLAMP_TO_EDGE, FilterMode.NEAREST, FilterMode.NEAREST, 1, OptionalDouble.empty()
+		);
 		if (this.tableTexture == null) {
 			this.buildTable();
 		}
@@ -377,13 +395,19 @@ public final class StreamManager {
 				}
 			}
 
-			this.raysThisInterval += this.probe.run(minecraft, config, (sprite, texelsPerBlock) -> {
-				StreamedSprite s = this.byAtlasSprite.get(sprite);
-				if (s != null) {
-					if (texelsPerBlock > s.wantCurrent) {
-						s.wantCurrent = texelsPerBlock;
+			this.raysThisInterval += this.probe.run(minecraft, config, (state, sprites, texelsPerBlock) -> {
+				for (TextureAtlasSprite sprite : sprites) {
+					StreamedSprite s = this.byAtlasSprite.get(sprite);
+					if (s != null) {
+						want(s, texelsPerBlock);
+						for (StreamedSprite variant : this.ctm.forSprite(s)) {
+							want(variant, texelsPerBlock);
+						}
 					}
-					s.hitsCurrent++;
+				}
+				// Connected/random textures replace the model's sprite when the chunk is built.
+				for (StreamedSprite variant : this.ctm.forBlock(state.getBlock())) {
+					want(variant, texelsPerBlock);
 				}
 			});
 
@@ -406,6 +430,13 @@ public final class StreamManager {
 			this.logStats(now);
 		}
 		TestHarness.frame(minecraft);
+	}
+
+	private static void want(final StreamedSprite s, final float texelsPerBlock) {
+		if (texelsPerBlock > s.wantCurrent) {
+			s.wantCurrent = texelsPerBlock;
+		}
+		s.hitsCurrent++;
 	}
 
 	private int targetResolution(final StreamedSprite s) {
@@ -604,6 +635,45 @@ public final class StreamManager {
 		}
 	}
 
+	/** Debug: saves what the pool holds for resident sprites whose name contains {@code filter}, per plane. */
+	void debugDump(final String filter, final java.io.File dir) {
+		PoolPage page = this.page;
+		if (page == null) {
+			return;
+		}
+		dir.mkdirs();
+		CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
+		for (int i = 1; i < this.sprites.length; i++) {
+			StreamedSprite s = this.sprites[i];
+			if (s.residentResolution == 0 || !s.name.getPath().contains(filter)) {
+				continue;
+			}
+			int largest = Math.max(s.sourceWidth, s.sourceHeight);
+			int w = Math.max(1, (int) ((long) s.sourceWidth * s.residentResolution / largest));
+			int h = Math.max(1, (int) ((long) s.sourceHeight * s.residentResolution / largest));
+			String base = s.name.getPath().replace('/', '_') + "@" + s.residentResolution + "_at" + PoolPage.x(s.residentBlock) + "x" + PoolPage.y(s.residentBlock);
+			SpriteStreamMod.LOGGER.info("[SpriteStream] Dumping {} (block {}x{}, {}x{})", s.name, PoolPage.x(s.residentBlock), PoolPage.y(s.residentBlock), w, h);
+			for (int plane = 0; plane < page.planeCount; plane++) {
+				String file = base + "_p" + plane + ".png";
+				com.mojang.renderpearl.api.buffers.GpuBuffer buffer = RenderSystem.getDevice().createBuffer(() -> "spritestream dump", 9, (long) w * h * 4L);
+				encoder.copyTextureToBuffer(page.textures[plane], buffer, 0L, () -> {
+					try (com.mojang.renderpearl.api.buffers.GpuBufferSlice.MappedView read = buffer.map(true, false);
+						NativeImage image = new NativeImage(w, h, false)) {
+						for (int y = 0; y < h; y++) {
+							for (int x = 0; x < w; x++) {
+								image.setPixelABGR(x, y, read.data().getInt((x + y * w) * 4));
+							}
+						}
+						image.writeToFile(new java.io.File(dir, file));
+					} catch (Exception e) {
+						SpriteStreamMod.LOGGER.warn("[SpriteStream] Dump of {} failed", file, e);
+					}
+					buffer.close();
+				}, 0, PoolPage.x(s.residentBlock), PoolPage.y(s.residentBlock), w, h);
+			}
+		}
+	}
+
 	/** Logs how many visible sprites want each resolution, labelled for test runs. */
 	void logUsage(final String label) {
 		Map<Integer, Integer> wanting = new java.util.TreeMap<>();
@@ -668,6 +738,11 @@ public final class StreamManager {
 		return this.poolSampler;
 	}
 
+	/** Unfiltered sampler for the normal and specular planes. */
+	public @Nullable GpuSampler pbrSampler() {
+		return this.pbrSampler;
+	}
+
 	public @Nullable GpuSampler nearestSampler() {
 		return this.nearestSampler;
 	}
@@ -706,7 +781,10 @@ public final class StreamManager {
 
 		/** Worker thread: decode the sources and build exactly this resolution's mip chain for each plane. */
 		void decode() throws Exception {
-			int levels = Integer.numberOfTrailingZeros(this.resolution) - Integer.numberOfTrailingZeros(this.page.baseResolution) + 1;
+			// Every mip level the page has, not just down to the base size: the GPU's level choice can run a
+			// little coarser than the shader's estimate, and an unfilled level there reads as stray data (in
+			// LabPBR specular, a lowered alpha means "emissive", which showed as glowing lines at block edges).
+			int levels = this.page.mipLevels;
 			int largest = Math.max(this.sprite.sourceWidth, this.sprite.sourceHeight);
 			int w = Math.max(1, (int) ((long) this.sprite.sourceWidth * this.resolution / largest));
 			int h = Math.max(1, (int) ((long) this.sprite.sourceHeight * this.resolution / largest));

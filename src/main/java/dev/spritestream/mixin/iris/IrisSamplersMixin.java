@@ -31,13 +31,21 @@ public abstract class IrisSamplersMixin {
 		samplers.addTextureSampler(
 			new SamplerHolder.TextureBinding("spritestream/table", manager::tableView, () -> GlSampler.NEAREST, manager::nearestSampler), false, "ss_Table"
 		);
-		String[] names = {"ss_Color", "ss_Normal", "ss_Specular"};
-		for (int plane = 0; plane < names.length; plane++) {
-			int p = plane;
+		samplers.addTextureSampler(
+			new SamplerHolder.TextureBinding("spritestream/plane0", () -> manager.planeView(0), () -> GlSampler.MIPPED_LINEAR, manager::poolSampler),
+			false,
+			"ss_Color"
+		);
+		// LabPBR data must not be blended between texels (see StreamManager#pbrSampler).
+		String[] pbrNames = {"ss_Normal", "ss_Specular"};
+		for (int i = 0; i < pbrNames.length; i++) {
+			int p = i + 1;
 			samplers.addTextureSampler(
-				new SamplerHolder.TextureBinding("spritestream/plane" + p, () -> manager.planeView(p), () -> GlSampler.MIPPED_LINEAR, manager::poolSampler),
+				new SamplerHolder.TextureBinding(
+					"spritestream/plane" + p, () -> manager.planeView(p), () -> GlSampler.MIPPED_NEAREST_NEAREST, manager::pbrSampler
+				),
 				false,
-				names[p]
+				pbrNames[i]
 			);
 		}
 	}

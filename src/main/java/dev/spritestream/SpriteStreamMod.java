@@ -11,6 +11,8 @@ public final class SpriteStreamMod implements ClientModInitializer {
 	public static final Logger LOGGER = LogUtils.getLogger();
 	/** {@code -Dspritestream.disabled=true} leaves every atlas untouched; used for baseline measurements. */
 	public static final boolean DISABLED = Boolean.getBoolean("spritestream.disabled");
+	/** Comma-separated debug switches from {@code -Dspritestream.debug=...}, for narrowing down rendering issues. */
+	public static final java.util.Set<String> DEBUG = java.util.Set.of(System.getProperty("spritestream.debug", "").split(","));
 	public static SpriteStreamConfig config = new SpriteStreamConfig();
 
 	private static @Nullable Object irisApi;

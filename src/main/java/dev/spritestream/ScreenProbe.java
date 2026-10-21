@@ -34,9 +34,9 @@ import org.joml.Vector3fc;
  * pixels-per-block, so zoomed-in distant blocks get upgraded like near ones.
  */
 public final class ScreenProbe {
-	/** Callback receiving one measurement: the sprite and the texels-per-block it needs at that pixel. */
+	/** Callback receiving one measurement: the block hit, its sprites on that face, and the texels-per-block needed. */
 	public interface Sink {
-		void accept(TextureAtlasSprite sprite, float texelsPerBlock);
+		void accept(BlockState state, TextureAtlasSprite[] sprites, float texelsPerBlock);
 	}
 
 	private static final TextureAtlasSprite[] NO_SPRITES = new TextureAtlasSprite[0];
@@ -108,9 +108,7 @@ public final class ScreenProbe {
 
 				BlockPos pos = hit.getBlockPos();
 				BlockState state = level.getBlockState(pos);
-				for (TextureAtlasSprite sprite : this.spritesFor(models, state, pos, hit.getDirection())) {
-					sink.accept(sprite, texelsPerBlock);
-				}
+				sink.accept(state, this.spritesFor(models, state, pos, hit.getDirection()), texelsPerBlock);
 			}
 		}
 		return rays;

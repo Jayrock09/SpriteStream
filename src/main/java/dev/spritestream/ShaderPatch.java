@@ -66,6 +66,15 @@ public final class ShaderPatch {
 		    pdy = dy * scale;
 		    lod = explicitLod >= 0.0 ? explicitLod : log2(max(max(length(pdx / ext.zw), length(pdy / ext.zw)), 1e-6));
 		    if (lod >= info.x) return false;
+		#ifdef SS_DEBUG_IDCHECK
+		    vec2 margin = (rect.zw - rect.xy) * 0.002;
+		    if (any(lessThan(uv, rect.xy + margin)) || any(greaterThan(uv, rect.zw - margin))) return false;
+		#endif
+		#ifdef SS_DEBUG_NOEDGE
+		    vec2 rel = (uv - rect.xy) / (rect.zw - rect.xy);
+		    vec2 edge = ext.zw / ext.xy * exp2(max(ceil(lod), 0.0)) * 1.5;
+		    if (any(lessThan(rel, edge)) || any(greaterThan(rel, 1.0 - edge))) return false;
+		#endif
 		    // Keep the filter inside this block so neighbouring blocks never bleed in.
 		    vec2 inset = min(0.5 * exp2(max(ceil(lod), 0.0)) * ext.zw, ext.xy * 0.5);
 		    puv = slot.yz + clamp((uv - rect.xy) * scale, inset, ext.xy - inset);
@@ -151,6 +160,12 @@ public final class ShaderPatch {
 		List<Plane> planes = new ArrayList<>();
 		int lastDeclarationEnd = -1;
 		for (Plane plane : PLANES) {
+			if (SpriteStreamMod.DEBUG.contains("coloronly") && plane.index != PoolPage.PLANE_COLOR) {
+				continue;
+			}
+			if (SpriteStreamMod.DEBUG.contains("noplane-" + plane.suffix)) {
+				continue;
+			}
 			Matcher declaration = Pattern.compile("uniform\\s+(?:\\w+\\s+)*sampler2D\\s+" + plane.packSampler + "\\s*;").matcher(source);
 			if (declaration.find()) {
 				planes.add(plane);
@@ -171,7 +186,14 @@ public final class ShaderPatch {
 			return source;
 		}
 
-		StringBuilder prototypes = new StringBuilder("\nuniform sampler2D ss_IdMap;\nuniform sampler2D ss_Table;\n");
+		StringBuilder prototypes = new StringBuilder("\n");
+		if (SpriteStreamMod.DEBUG.contains("idcheck")) {
+			prototypes.append("#define SS_DEBUG_IDCHECK\n");
+		}
+		if (SpriteStreamMod.DEBUG.contains("noedge")) {
+			prototypes.append("#define SS_DEBUG_NOEDGE\n");
+		}
+		prototypes.append("uniform sampler2D ss_IdMap;\nuniform sampler2D ss_Table;\n");
 		StringBuilder bodies = new StringBuilder("\n").append(COMMON);
 		for (Plane plane : planes) {
 			prototypes.append("uniform sampler2D ").append(plane.poolSampler).append(";\n");

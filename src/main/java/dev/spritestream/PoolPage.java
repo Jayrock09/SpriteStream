@@ -56,7 +56,8 @@ public final class PoolPage {
 		for (int plane = 0; plane < planeCount; plane++) {
 			this.textures[plane] = device.createTexture(
 				"spritestream pool " + names[plane],
-				GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_TEXTURE_BINDING,
+				// COPY_SRC lets the debug dump read blocks back.
+				GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_COPY_SRC | GpuTexture.USAGE_TEXTURE_BINDING,
 				GpuFormat.RGBA8_UNORM,
 				width,
 				height,
