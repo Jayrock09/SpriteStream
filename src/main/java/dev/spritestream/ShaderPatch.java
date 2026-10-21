@@ -162,7 +162,8 @@ public final class ShaderPatch {
 		}
 
 		int[] rewrites = new int[1];
-		String body = rewriteCalls(source, planes, rewrites);
+		String specialized = specializeSamplerFunctions(source, planes);
+		String body = rewriteCalls(specialized, planes, rewrites);
 		if (rewrites[0] == 0) {
 			return source;
 		}
@@ -224,6 +225,165 @@ public final class ShaderPatch {
 			pos = lineEnd + 1;
 		}
 		return end;
+	}
+
+	// ---------------------------------------------------------------- helpers that take the atlas as a parameter
+
+	private static final Pattern FUNCTION_HEADER = Pattern.compile("\\b(\\w+)\\s+(\\w+)\\s*\\(([^(){};]*)\\)\\s*\\{");
+	private static final Pattern SAMPLER_PARAM = Pattern.compile("^\\s*(?:\\w+\\s+)*sampler2D\\s+(\\w+)\\s*$");
+
+	/** A function with exactly one {@code sampler2D} parameter. */
+	private record SamplerFunction(String name, int headerStart, int nameStart, int bodyEnd, List<String> params, int samplerIndex, String samplerParam) {
+	}
+
+	/** One text replacement; applied back to front so earlier offsets stay valid. */
+	private record TextEdit(int start, int end, String text) {
+	}
+
+	/**
+	 * Many packs read the atlas through a helper such as {@code vec4 sampleSwitch(sampler2D s, vec2 uv, ...)},
+	 * called as {@code sampleSwitch(gtexture, ...)} / {@code (normals, ...)} / {@code (specular, ...)}. Inside
+	 * the helper the texture is just {@code s}, so the call rewrite cannot see which atlas it is. For every
+	 * such call this emits a copy of the helper with the parameter replaced by the real sampler
+	 * ({@code sampleSwitch__ss_c(uv, ...)}), whose texture calls are then rewritten like any other. Repeats a
+	 * few times so helpers calling helpers are covered.
+	 */
+	static String specializeSamplerFunctions(final String source, final List<Plane> planes) {
+		String text = source;
+		for (int pass = 0; pass < 4; pass++) {
+			List<SamplerFunction> functions = findSamplerFunctions(text);
+			if (functions.isEmpty()) {
+				break;
+			}
+			List<TextEdit> edits = new ArrayList<>();
+			for (SamplerFunction function : functions) {
+				java.util.Set<Plane> needed = new java.util.LinkedHashSet<>();
+				Matcher call = Pattern.compile("\\b" + Pattern.quote(function.name) + "\\s*\\(").matcher(text);
+				while (call.find()) {
+					if (call.start() == function.nameStart) {
+						continue;
+					}
+					int open = call.end() - 1;
+					int close = matchingParen(text, open);
+					if (close < 0) {
+						continue;
+					}
+					List<String> args = splitArguments(text.substring(open + 1, close));
+					if (args.size() != function.params.size()) {
+						continue;
+					}
+					String samplerArg = args.get(function.samplerIndex).trim();
+					for (Plane plane : planes) {
+						if (plane.packSampler.equals(samplerArg)) {
+							List<String> rest = new ArrayList<>(args);
+							rest.remove(function.samplerIndex);
+							edits.add(new TextEdit(call.start(), close + 1, specializedName(function, plane) + "(" + String.join(",", rest) + ")"));
+							needed.add(plane);
+						}
+					}
+				}
+				for (Plane plane : needed) {
+					if (!text.contains(specializedName(function, plane) + "(")) {
+						edits.add(new TextEdit(function.bodyEnd, function.bodyEnd, "\n" + specialize(text, function, plane)));
+					}
+				}
+			}
+			if (edits.isEmpty()) {
+				break;
+			}
+			edits.sort((a, b) -> Integer.compare(b.start, a.start));
+			StringBuilder out = new StringBuilder(text);
+			for (TextEdit edit : edits) {
+				out.replace(edit.start, edit.end, edit.text);
+			}
+			text = out.toString();
+		}
+		return text;
+	}
+
+	private static List<SamplerFunction> findSamplerFunctions(final String text) {
+		List<SamplerFunction> functions = new ArrayList<>();
+		Matcher header = FUNCTION_HEADER.matcher(text);
+		while (header.find()) {
+			String name = header.group(2);
+			if (name.startsWith("ss_") || !header.group(3).contains("sampler2D")) {
+				continue;
+			}
+			List<String> params = splitArguments(header.group(3));
+			int samplerIndex = -1;
+			String samplerParam = null;
+			for (int i = 0; i < params.size(); i++) {
+				Matcher param = SAMPLER_PARAM.matcher(params.get(i));
+				if (param.matches()) {
+					if (samplerIndex >= 0) {
+						samplerIndex = -2; // more than one sampler parameter: leave it alone
+						break;
+					}
+					samplerIndex = i;
+					samplerParam = param.group(1);
+				}
+			}
+			int bodyEnd = matchingBrace(text, header.end() - 1);
+			if (samplerIndex < 0 || bodyEnd < 0) {
+				continue;
+			}
+			functions.add(new SamplerFunction(name, header.start(), header.start(2), bodyEnd + 1, params, samplerIndex, samplerParam));
+		}
+		return functions;
+	}
+
+	private static String specializedName(final SamplerFunction function, final Plane plane) {
+		return function.name + "__ss_" + plane.suffix;
+	}
+
+	/** The function's source with the sampler parameter dropped and every use of it naming the real sampler. */
+	private static String specialize(final String text, final SamplerFunction function, final Plane plane) {
+		String returnType = text.substring(function.headerStart, function.nameStart);
+		List<String> params = new ArrayList<>(function.params);
+		params.remove(function.samplerIndex);
+		int bodyStart = text.indexOf('{', function.nameStart);
+		String body = text.substring(bodyStart, function.bodyEnd)
+			.replaceAll("\\b" + Pattern.quote(function.samplerParam) + "\\b", plane.packSampler);
+		return returnType + specializedName(function, plane) + "(" + String.join(",", params) + ") " + body;
+	}
+
+	/** Splits a comma-separated list at top level (ignoring commas inside parentheses or brackets). */
+	private static List<String> splitArguments(final String list) {
+		List<String> parts = new ArrayList<>();
+		if (list.isBlank()) {
+			return parts;
+		}
+		int depth = 0;
+		int start = 0;
+		for (int i = 0; i < list.length(); i++) {
+			char c = list.charAt(i);
+			if (c == '(' || c == '[') {
+				depth++;
+			} else if (c == ')' || c == ']') {
+				depth--;
+			} else if (c == ',' && depth == 0) {
+				parts.add(list.substring(start, i));
+				start = i + 1;
+			}
+		}
+		parts.add(list.substring(start));
+		return parts;
+	}
+
+	private static int matchingBrace(final String source, final int open) {
+		int depth = 0;
+		for (int i = open; i < source.length(); i++) {
+			char c = source.charAt(i);
+			if (c == '{') {
+				depth++;
+			} else if (c == '}') {
+				depth--;
+				if (depth == 0) {
+					return i;
+				}
+			}
+		}
+		return -1;
 	}
 
 	/** Rewrites atlas sampling calls, recursing into their arguments; counts rewrites in {@code count[0]}. */
