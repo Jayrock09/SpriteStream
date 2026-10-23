@@ -47,6 +47,16 @@ public final class ShaderPatch {
 		    return texelFetch(ss_Table, ivec2((id & 255) * 4 + k, id >> 8), 0);
 		}
 
+		// Sodium's anti-aliased nearest: when a texel covers several pixels, move the sample toward the texel
+		// centre so it stays crisp like the original, with a one-pixel smooth edge instead of a bilinear blur.
+		vec2 ss_sharpen(vec2 puv, vec2 pdx, vec2 pdy, vec2 texel) {
+		    vec2 screen = max(sqrt(pdx * pdx + pdy * pdy), vec2(1e-9));
+		    vec2 t = puv / texel;
+		    vec2 center = round(t) - 0.5;
+		    vec2 offset = clamp((t - center - 0.5) * texel / screen + 0.5, 0.0, 1.0);
+		    return (center + offset) * texel;
+		}
+
 		// Maps an atlas UV into the pool. Returns false when the sprite is not resident, lacks this plane, or
 		// the base atlas already holds as much detail as the footprint needs. explicitLod < 0 means "from the
 		// gradients"; otherwise it is a level in pool texels (0 = sharpest).
@@ -78,6 +88,14 @@ public final class ShaderPatch {
 		    // Keep the filter inside this block so neighbouring blocks never bleed in.
 		    vec2 inset = min(0.5 * exp2(max(ceil(lod), 0.0)) * ext.zw, ext.xy * 0.5);
 		    puv = slot.yz + clamp((uv - rect.xy) * scale, inset, ext.xy - inset);
+		    // Colour is magnified sharply, like the original texture; normal/specular use an unfiltered sampler.
+		    if (plane == 0) {
+		        if (explicitLod >= 0.0) {
+		            if (lod <= 0.0) puv = (floor(puv / ext.zw) + 0.5) * ext.zw;
+		        } else if (lod < 0.0) {
+		            puv = ss_sharpen(puv, pdx, pdy, ext.zw);
+		        }
+		    }
 		    fade = slot.w;
 		    return true;
 		}

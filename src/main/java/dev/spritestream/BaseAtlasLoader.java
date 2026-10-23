@@ -66,6 +66,14 @@ public final class BaseAtlasLoader {
 			if (!activeForCurrentLoad) {
 				return vanilla.loadSprite(spriteLocation, resource);
 			}
+			if (spriteLocation.getPath().startsWith("entity/")) {
+				// Entity textures some packs put in the block atlas are drawn by entity renderers, not the
+				// patched terrain shader, so they could never stream back up: cap them like the other atlases.
+				int cap = SpriteStreamMod.config.otherAtlasResolution;
+				return cap > 0
+					? load(spriteLocation, resource, additionalMetadataSections, vanilla, cap, false)
+					: vanilla.loadSprite(spriteLocation, resource);
+			}
 			return load(spriteLocation, resource, additionalMetadataSections, vanilla, SpriteStreamMod.config.baseResolution, true);
 		};
 	}
@@ -112,7 +120,9 @@ public final class BaseAtlasLoader {
 			AnimationMetadataSection animation = animationInfo.get();
 			FrameSize frame = animation.calculateFrameSize(image.getWidth(), image.getHeight());
 			boolean explicitSize = animation.frameWidth().isPresent() || animation.frameHeight().isPresent();
-			int frameCap = Math.min(cap, config.animatedResolution);
+			// Animated block textures (water, lava, fire, ...) are not streamed, so they keep their own cap
+			// instead of dropping to the base resolution.
+			int frameCap = recordSource ? config.animatedResolution : Math.min(cap, config.animatedResolution);
 			boolean evenFrames = Mth.isMultipleOf(image.getWidth(), frame.width()) && Mth.isMultipleOf(image.getHeight(), frame.height());
 			if (!explicitSize && evenFrames && Math.max(frame.width(), frame.height()) > frameCap) {
 				int largest = Math.max(frame.width(), frame.height());

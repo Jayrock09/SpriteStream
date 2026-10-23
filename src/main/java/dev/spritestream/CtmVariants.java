@@ -166,6 +166,14 @@ public final class CtmVariants {
 				continue;
 			}
 			String path = token.endsWith(".png") ? token.substring(0, token.length() - 4) : token;
+			if (path.startsWith("./")) {
+				// Relative to the properties file's folder.
+				Identifier relative = Identifier.tryBuild(namespace, directory + "/" + path.substring(2));
+				if (relative != null) {
+					result.add(relative);
+				}
+				continue;
+			}
 			String tileNamespace = namespace;
 			int colon = path.indexOf(':');
 			if (colon > 0) {
@@ -185,9 +193,12 @@ public final class CtmVariants {
 		return result;
 	}
 
-	/** {@code bricks} or {@code block/bricks} or {@code minecraft:block/bricks} as an atlas sprite id. */
+	/**
+	 * {@code bricks}, {@code block/bricks}, {@code minecraft:block/bricks} or
+	 * {@code textures/block/extra/anvil_side.png} as an atlas sprite id.
+	 */
 	private static Identifier textureId(final String namespace, final String name) {
-		String path = name;
+		String path = name.endsWith(".png") ? name.substring(0, name.length() - 4) : name;
 		String ns = namespace;
 		int colon = path.indexOf(':');
 		if (colon > 0) {

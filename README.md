@@ -32,7 +32,7 @@ Alpha Piscium.
 | `vramBudgetMiB` | 2560 | Total pool size, shared by all planes (3 planes with a shader pack, so each gets a third) |
 | `qualityBias` | 1.0 | Texels per screen pixel to aim for (lower = less VRAM, softer) |
 | `otherAtlasResolution` | 256 | Cap for item/particle/chest/etc. atlases (0 = off; GUI is never capped) |
-| `animatedResolution` | 128 | Cap for animated textures (these are not streamed) |
+| `animatedResolution` | 256 | Cap for animated textures (these are not streamed) |
 | `probeColumns` / `probeRows` | 64 / 36 | Probe ray grid (jittered 4×4 over 16 frames) |
 | `uploadMiBPerFrame` | 24 | Upload budget per frame |
 | `evictDelaySeconds` | 3.0 | How long a texture keeps its resolution after it stops being needed |

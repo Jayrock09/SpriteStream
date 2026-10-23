@@ -12,11 +12,15 @@ import net.fabricmc.loader.api.FabricLoader;
 /** User settings, stored in config/spritestream.json. */
 public final class SpriteStreamConfig {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+	private static final int CURRENT_VERSION = 2;
+
+	/** Bumped when a default changes, so files written with the old default pick up the new one. */
+	public int configVersion;
 
 	/** Resolution every block texture is stored at in the always-resident atlas. */
 	public int baseResolution = 64;
 	/** Animated textures are not streamed, so they are capped here in the atlas instead. */
-	public int animatedResolution = 128;
+	public int animatedResolution = 256;
 	/** Cap for the non-streamed atlases (items, particles, chests, ...); 0 leaves them untouched. GUI is never capped. */
 	public int otherAtlasResolution = 256;
 	/** Highest resolution the pool will hold (128 … 4096). Sources above this are downscaled. */
@@ -47,11 +51,13 @@ public final class SpriteStreamConfig {
 	public static SpriteStreamConfig load() {
 		Path path = FabricLoader.getInstance().getConfigDir().resolve("spritestream.json");
 		SpriteStreamConfig config = new SpriteStreamConfig();
+		config.configVersion = CURRENT_VERSION;
 		if (Files.exists(path)) {
 			try (Reader reader = Files.newBufferedReader(path)) {
 				SpriteStreamConfig read = GSON.fromJson(reader, SpriteStreamConfig.class);
 				if (read != null) {
 					config = read;
+					config.migrate();
 				}
 			} catch (Exception e) {
 				SpriteStreamMod.LOGGER.warn("Could not read {}, using defaults", path, e);
@@ -64,6 +70,15 @@ public final class SpriteStreamConfig {
 			SpriteStreamMod.LOGGER.warn("Could not write {}", path, e);
 		}
 		return config;
+	}
+
+	/** Moves values still at an old default to the current default. */
+	private void migrate() {
+		// Files from before configVersion existed parse it as 0.
+		if (this.configVersion < 2 && this.animatedResolution == 128) {
+			this.animatedResolution = 256;
+		}
+		this.configVersion = CURRENT_VERSION;
 	}
 
 	private void sanitize() {

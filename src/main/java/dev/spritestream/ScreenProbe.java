@@ -41,6 +41,8 @@ public final class ScreenProbe {
 
 	private static final TextureAtlasSprite[] NO_SPRITES = new TextureAtlasSprite[0];
 	private static final int JITTER = 4;
+	/** Random seeds tried per block state to find all of its weighted model variants. */
+	private static final int VARIANT_SAMPLES = 48;
 
 	/** Sprites per (state, face); index 6 holds the unculled quads used when no face matches. */
 	private final Map<BlockState, TextureAtlasSprite[][]> spriteCache = new IdentityHashMap<>();
@@ -125,9 +127,15 @@ public final class ScreenProbe {
 	}
 
 	private TextureAtlasSprite[][] collect(final BlockStateModel model, final BlockState state, final BlockPos pos) {
+		// Blockstates can pick between weighted model variants (often with different textures) per position.
+		// The cache is per state, so gather the parts of every variant rather than just this position's.
 		List<BlockStateModelPart> parts = new ArrayList<>();
 		this.random.setSeed(state.getSeed(pos));
 		model.collectParts(this.random, parts);
+		for (long seed = 1; seed <= VARIANT_SAMPLES; seed++) {
+			this.random.setSeed(seed * 0x9E3779B97F4A7C15L);
+			model.collectParts(this.random, parts);
+		}
 
 		List<List<TextureAtlasSprite>> byFace = new ArrayList<>();
 		for (int i = 0; i < 7; i++) {
