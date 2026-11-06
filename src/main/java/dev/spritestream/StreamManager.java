@@ -471,6 +471,21 @@ public final class StreamManager {
 		TestHarness.frame(minecraft);
 	}
 
+	/** Benchmark evidence: resident/wanted resolution of every sprite whose name contains one of {@code parts}. */
+	public String residentOf(final String... parts) {
+		StringBuilder out = new StringBuilder();
+		for (int i = 1; i < this.sprites.length; i++) {
+			StreamedSprite s = this.sprites[i];
+			for (String part : parts) {
+				if (s.name.getPath().contains(part)) {
+					out.append(s.name.getPath()).append('=').append(s.residentResolution).append('/').append(this.targetResolution(s)).append(' ');
+					break;
+				}
+			}
+		}
+		return out.toString().trim();
+	}
+
 	/** One-word-per-field pool summary for benchmark CSVs. */
 	public String benchUsage() {
 		PoolPage page = this.page;

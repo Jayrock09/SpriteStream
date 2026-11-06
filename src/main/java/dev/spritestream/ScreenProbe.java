@@ -47,6 +47,11 @@ public final class ScreenProbe {
 	 * probe's cost. The streamer's want windows last 1.5 s, which still see ~90 full jittered grids.
 	 */
 	static final float GRIDS_PER_SECOND = 60.0F;
+	/**
+	 * Most render-thread time the probe may take per frame. Normally it stays well below this; zoomed in (spyglass,
+	 * zoom mods) rays reach far and cost several times more, and then the grid is finished over the next frames.
+	 */
+	static final long MAX_NANOS_PER_FRAME = 1_500_000L;
 	/** Random seeds tried per block state to find all of its weighted model variants. */
 	private static final int VARIANT_SAMPLES = 48;
 
@@ -81,6 +86,9 @@ public final class ScreenProbe {
 		float aspect = (float) screenW / screenH;
 		// Beyond this depth one block covers fewer pixels than the base texture has texels.
 		float maxDepth = Math.min(512.0F, screenH * config.qualityBias / (2.0F * tanHalfY * config.baseResolution));
+		// Nothing past the render distance is drawn. Zooming in (spyglass, zoom mods) raises maxDepth to the cap, and
+		// rays into the sky would otherwise walk hundreds of blocks of empty, unloaded chunks.
+		maxDepth = Math.min(maxDepth, (minecraft.options.getEffectiveRenderDistance() + 1) * 16.0F);
 
 		Vec3 origin = camera.position();
 		Vector3fc forward = camera.forwardVector();
@@ -94,7 +102,11 @@ public final class ScreenProbe {
 		BlockStateModelSet models = minecraft.getModelManager().getBlockStateModelSet();
 		int rays = 0;
 
+		long started = System.nanoTime();
 		for (int done = 0; done < rowsThisFrame; done++) {
+			if (done > 0 && System.nanoTime() - started > MAX_NANOS_PER_FRAME) {
+				break;
+			}
 			if (this.nextRow >= rows) {
 				this.nextRow = 0;
 				this.step = (this.step + 1) % (JITTER * JITTER);

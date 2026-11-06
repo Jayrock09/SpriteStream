@@ -108,6 +108,10 @@ dependencies {
 		testRuntimeOnly files(irisJar)
 		// gradlew runClient -Piris adds Iris so shader-pack (PBR/POM) streaming can be tested.
 		// -PirisRuntime=111 runs with Iris 1.11.7 instead; -PirisRuntime=<path to jar> with any other Iris.
+		// -PextraRuntime=<jar>[;<jar>] adds mods to the dev client (e.g. Mod Menu for the release checklist)
+		if (project.hasProperty("extraRuntime")) {
+			runtimeOnly files(project.property("extraRuntime").toString().split(";"))
+		}
 		if (project.hasProperty("iris")) {
 			def runtime = project.findProperty("irisRuntime")?.toString()
 			if (runtime == "111") {

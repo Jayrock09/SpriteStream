@@ -97,6 +97,19 @@ public final class Benchmark {
 					} else {
 						if ("materials".equals(SCENES)) {
 							materialSpots(minecraft);
+						} else if ("extras".equals(SCENES)) {
+							loadSpots(minecraft);
+							Spot c = spots.stream().filter(spot -> spot.name().equals("closeup")).findFirst().orElseThrow();
+							spots.clear();
+							buildExtras(minecraft, BlockPos.containing(c.x(), c.y(), c.z()));
+							spots.add(new Spot("ctm", c.x() + 19.0, c.y(), c.z(), 0.0F, 10.0F));
+							// 48 blocks from the wall and 20 up, looking at it: too far for more than the base texture
+							// unless the spyglass zooms in.
+							float pitch = (float) Math.toDegrees(Math.atan2(18.5, 48.0));
+							spots.add(new Spot("zoom-off", c.x() - 2.0, c.y() + 20.0, c.z() - 45.0, 0.0F, pitch));
+							spots.add(new Spot("zoom-on", c.x() - 2.0, c.y() + 20.0, c.z() - 45.0, 0.0F, pitch));
+							spots.add(new Spot("hand", c.x(), c.y(), c.z(), 0.0F, 15.0F));
+							spots.add(new Spot("modmenu", c.x(), c.y(), c.z(), 0.0F, 15.0F));
 						} else if ("toggles".equals(SCENES)) {
 							loadSpots(minecraft);
 							rebuildWall(minecraft);
@@ -174,6 +187,9 @@ public final class Benchmark {
 
 	private static void hold(final Minecraft minecraft) {
 		Spot spot = spots.get(spotIndex);
+		if (spot.name().equals("zoom-on")) {
+			minecraft.options.keyUse.setDown(true);
+		}
 		float yaw = spot.name().equals("spin") ? spot.yaw() + (System.nanoTime() - phaseStart) / 1e9F * 90.0F : spot.yaw();
 		minecraft.player.setYRot(yaw);
 		minecraft.player.setYHeadRot(yaw);
@@ -201,7 +217,14 @@ public final class Benchmark {
 	private static void goTo(final Minecraft minecraft, final Spot spot) {
 		warmupMax = 0;
 		lastFrame = 0;
+		minecraft.options.keyUse.setDown(spot.name().equals("zoom-on"));
+		if (spot.name().equals("zoom-on")) {
+			// Start using the spyglass; holding the key keeps it raised.
+			net.minecraft.client.KeyMapping.click(minecraft.options.keyUse.getDefaultKey());
+		}
 		switch (spot.name()) {
+			case "zoom-off", "hand" -> holdItem(minecraft, spot.name().equals("hand") ? "diamond_sword" : "spyglass");
+			case "modmenu" -> openModMenu(minecraft);
 			case "after-reload" -> minecraft.reloadResourcePacks();
 			case "shaders-off" -> toggleShaders(minecraft, false);
 			case "shaders-on" -> toggleShaders(minecraft, true);
@@ -212,6 +235,64 @@ public final class Benchmark {
 		server.execute(() -> {
 			command(server, spot.name().startsWith("night") ? "time set 18000" : "time set 6000");
 			command(server, String.format(Locale.ROOT, "tp @p %.2f %.2f %.2f %.1f %.1f", spot.x(), spot.y(), spot.z(), spot.yaw(), spot.pitch()));
+		});
+	}
+
+	/** Creative and flying, holding {@code item}, so the hand and spyglass work (spectators have neither). */
+	private static void holdItem(final Minecraft minecraft, final String item) {
+		MinecraftServer server = minecraft.getSingleplayerServer();
+		server.execute(() -> {
+			command(server, "gamemode creative @p");
+			command(server, "item replace entity @p weapon.mainhand with minecraft:" + item);
+			var player = server.getPlayerList().getPlayers().getFirst();
+			player.getAbilities().flying = true;
+			player.onUpdateAbilities();
+		});
+	}
+
+	/** Mod Menu's list, filtered to SpriteStream and with its entry selected, when Mod Menu is installed. */
+	private static void openModMenu(final Minecraft minecraft) {
+		try {
+			Class<?> screenClass = Class.forName("com.terraformersmc.modmenu.gui.ModsScreen");
+			Object screen = screenClass.getConstructor(net.minecraft.client.gui.screens.Screen.class).newInstance((Object) null);
+			minecraft.gui.setScreen((net.minecraft.client.gui.screens.Screen) screen);
+			java.lang.reflect.Field search = screenClass.getDeclaredField("searchBox");
+			search.setAccessible(true);
+			((net.minecraft.client.gui.components.EditBox) search.get(screen)).setValue("spritestream");
+			java.lang.reflect.Field listField = screenClass.getDeclaredField("modList");
+			listField.setAccessible(true);
+			Object list = listField.get(screen);
+			java.util.List<?> entries = (java.util.List<?>) list.getClass().getMethod("children").invoke(list);
+			if (!entries.isEmpty()) {
+				for (java.lang.reflect.Method m : list.getClass().getMethods()) {
+					if (m.getName().equals("setSelected") && m.getParameterCount() == 1) {
+						m.invoke(list, entries.getFirst());
+						break;
+					}
+				}
+			}
+		} catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+			SpriteStreamMod.LOGGER.warn("[SpriteStream] Bench could not open Mod Menu", e);
+		}
+	}
+
+	/** Glass, bookshelves and sandstone (connected textures in Optimum Realism) next to the close-up wall. */
+	private static void buildExtras(final Minecraft minecraft, final BlockPos base) {
+		MinecraftServer server = minecraft.getSingleplayerServer();
+		server.execute(() -> {
+			ServerLevel level = server.overworld();
+			buildWall(level, base);
+			BlockState air = Blocks.AIR.defaultBlockState();
+			for (int x = 12; x <= 27; x++) {
+				for (int y = 0; y <= 5; y++) {
+					for (int z = -1; z <= 2; z++) {
+						level.setBlock(base.offset(x, y, z), air, 3);
+					}
+					BlockState wall = x < 17 ? Blocks.GLASS.defaultBlockState()
+						: x < 22 ? Blocks.BOOKSHELF.defaultBlockState() : Blocks.SANDSTONE.defaultBlockState();
+					level.setBlock(base.offset(x, y - 1, 3), wall, 3);
+				}
+			}
 		});
 	}
 
@@ -378,6 +459,10 @@ public final class Benchmark {
 			StreamManager.get().benchUsage(), warmupMax / 1e6
 		);
 		results.add(line);
+		if ("extras".equals(SCENES)) {
+			SpriteStreamMod.LOGGER.info("[SpriteStream] BENCH-RESIDENT {} {}", spot.name(),
+				StreamManager.get().residentOf("glass", "bookshelf", "sandstone", "stone_bricks", "jungle_log", "block/bricks"));
+		}
 		SpriteStreamMod.LOGGER.info("[SpriteStream] BENCH {}", line);
 		File dir = new File(dir(minecraft), LABEL);
 		dir.mkdirs();
