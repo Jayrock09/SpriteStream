@@ -1,5 +1,9 @@
 # SpriteStream
 
+> [!WARNING]
+> **AI was used to write the code for this project.** The idea, brainstorming, design and planning were all
+> done by a human (Jayrock09). Only the coding was done with AI.
+
 Fabric mod for Minecraft 26.3. Requires **Sodium 0.9.2+** (0.9.x). Optional: **Iris 1.11+** for shader packs,
 **Continuity** for connected textures.
 
