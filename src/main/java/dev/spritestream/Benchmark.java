@@ -58,6 +58,8 @@ public final class Benchmark {
 	private static final List<Spot> spots = new ArrayList<>();
 	private static long[] frameTimes = new long[1 << 16];
 	private static int frameCount;
+	/** Longest frame while arriving at a spot (reloads, shader toggles and chunk loading happen then). */
+	private static long warmupMax;
 	private static final List<String> results = new ArrayList<>();
 
 	private Benchmark() {
@@ -95,6 +97,17 @@ public final class Benchmark {
 					} else {
 						if ("materials".equals(SCENES)) {
 							materialSpots(minecraft);
+						} else if ("toggles".equals(SCENES)) {
+							loadSpots(minecraft);
+							rebuildWall(minecraft);
+							Spot village = spots.stream().filter(spot -> spot.name().equals("village")).findFirst().orElseThrow();
+							spots.removeIf(spot -> !spot.name().equals("closeup"));
+							Spot c = spots.getFirst();
+							for (String action : new String[] {"after-reload", "shaders-off", "shaders-on"}) {
+								spots.add(new Spot(action, c.x(), c.y(), c.z(), c.yaw(), c.pitch()));
+							}
+							// Turning on the spot at 90 degrees a second, over the village.
+							spots.add(new Spot("spin", village.x(), village.y(), village.z(), village.yaw(), village.pitch()));
 						} else {
 							loadSpots(minecraft);
 							rebuildWall(minecraft);
@@ -107,6 +120,10 @@ public final class Benchmark {
 			}
 			case 2 -> { // warm-up at the current spot
 				hold(minecraft);
+				if (lastFrame > 0) {
+					warmupMax = Math.max(warmupMax, now - lastFrame);
+				}
+				lastFrame = now;
 				if (inPhase > WARMUP_SECONDS) {
 					frameCount = 0;
 					streamNanos = probeNanos = assignNanos = uploadNanos = rays = 0;
@@ -157,9 +174,10 @@ public final class Benchmark {
 
 	private static void hold(final Minecraft minecraft) {
 		Spot spot = spots.get(spotIndex);
-		minecraft.player.setYRot(spot.yaw());
+		float yaw = spot.name().equals("spin") ? spot.yaw() + (System.nanoTime() - phaseStart) / 1e9F * 90.0F : spot.yaw();
+		minecraft.player.setYRot(yaw);
+		minecraft.player.setYHeadRot(yaw);
 		minecraft.player.setXRot(spot.pitch());
-		minecraft.player.setYHeadRot(spot.yaw());
 	}
 
 	private static void command(final MinecraftServer server, final String command) {
@@ -181,11 +199,28 @@ public final class Benchmark {
 	}
 
 	private static void goTo(final Minecraft minecraft, final Spot spot) {
+		warmupMax = 0;
+		lastFrame = 0;
+		switch (spot.name()) {
+			case "after-reload" -> minecraft.reloadResourcePacks();
+			case "shaders-off" -> toggleShaders(minecraft, false);
+			case "shaders-on" -> toggleShaders(minecraft, true);
+			default -> {
+			}
+		}
 		MinecraftServer server = minecraft.getSingleplayerServer();
 		server.execute(() -> {
 			command(server, spot.name().startsWith("night") ? "time set 18000" : "time set 6000");
 			command(server, String.format(Locale.ROOT, "tp @p %.2f %.2f %.2f %.1f %.1f", spot.x(), spot.y(), spot.z(), spot.yaw(), spot.pitch()));
 		});
+	}
+
+	private static void toggleShaders(final Minecraft minecraft, final boolean on) {
+		try {
+			Class.forName("net.irisshaders.iris.Iris").getMethod("toggleShaders", Minecraft.class, boolean.class).invoke(null, minecraft, on);
+		} catch (ReflectiveOperationException | LinkageError e) {
+			SpriteStreamMod.LOGGER.warn("[SpriteStream] Bench could not toggle shaders", e);
+		}
 	}
 
 	/** A platform high above spawn with a row of emissive and metal blocks (LabPBR emission and metal IDs). */
@@ -337,10 +372,10 @@ public final class Benchmark {
 		double p50 = sorted[n / 2] / 1e6;
 		double p99 = sorted[Math.min(n - 1, (int) (n * 0.99))] / 1e6;
 		String line = String.format(
-			Locale.ROOT, "%s,%s,%d,%.1f,%.1f,%.2f,%.2f,%.2f,%.3f,%.3f,%.3f,%.3f,%.0f,%s",
+			Locale.ROOT, "%s,%s,%d,%.1f,%.1f,%.2f,%.2f,%.2f,%.3f,%.3f,%.3f,%.3f,%.0f,%s,%.1f",
 			LABEL, spot.name(), n, 1000.0 / avgMs, lowFps, avgMs, p50, p99,
 			streamNanos / 1e6 / n, probeNanos / 1e6 / n, assignNanos / 1e6 / n, uploadNanos / 1e6 / n, (double) rays / n,
-			StreamManager.get().benchUsage()
+			StreamManager.get().benchUsage(), warmupMax / 1e6
 		);
 		results.add(line);
 		SpriteStreamMod.LOGGER.info("[SpriteStream] BENCH {}", line);
@@ -360,7 +395,7 @@ public final class Benchmark {
 		File file = new File(dir(minecraft), LABEL + "/results.csv");
 		file.getParentFile().mkdirs();
 		List<String> lines = new ArrayList<>();
-		lines.add("label,scene,frames,avg_fps,low1_fps,avg_ms,p50_ms,p99_ms,ss_cpu_ms,probe_ms,assign_ms,upload_ms,rays_per_frame,pool");
+		lines.add("label,scene,frames,avg_fps,low1_fps,avg_ms,p50_ms,p99_ms,ss_cpu_ms,probe_ms,assign_ms,upload_ms,rays_per_frame,pool,warmup_max_ms");
 		lines.addAll(results);
 		try {
 			Files.write(file.toPath(), lines, StandardCharsets.UTF_8);

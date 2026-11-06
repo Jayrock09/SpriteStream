@@ -56,8 +56,8 @@ Alpha Piscium.
   `optifine/ctm/**.properties` (`matchTiles`, `matchBlocks`, `tiles`); formats other than OptiFine CTM are not.
 - Block items in hand and GUI, and entity textures, are not streamed.
 - The whole pack is still decoded once at load to build the base atlas (with Iris, the `_n`/`_s` maps too, so
-  that Iris's PBR atlas build is instant later). Stratum 2048x took about 45 s on the loading screen before
-  `skipPbrMapsInBlockAtlas`; expect less now.
+  that Iris's PBR atlas build is instant later). Stratum 2048x loads in about 24 s without Iris and about 46 s
+  with Iris (RX 9070 PC, from a 17 GB zip).
 - Animated textures (water, lava, fire, ...) are not streamed; they are capped at `animatedResolution`.
 - The pool is allocated up front at `vramBudgetMiB`, whether or not it fills up. On cards with 8 GB or less,
   lower it (e.g. 1024–1536).
@@ -69,7 +69,7 @@ Alpha Piscium.
 | none | any | Streams through Sodium's terrain shader |
 | 1.12+ | Vulkan or OpenGL | Streams with and without shader packs (samplers bound as texture views) |
 | 1.11.x | OpenGL | Streams with and without shader packs (samplers bound as OpenGL texture names) |
-| 1.11.x | Vulkan | Iris 1.11 runs no shader packs on Vulkan (it only offers to switch to OpenGL), so SpriteStream streams as if Iris were not installed |
+| 1.11.x | Vulkan | Iris 1.11 runs no shader packs on Vulkan. In testing (RX 9070) Iris 1.11.7 on Vulkan crashed on the loading screen (`VK_ERROR_DEVICE_LOST`) even with SpriteStream's streaming off, so use OpenGL with Iris 1.11 |
 | older than 1.11, or one whose code changed | any | Turns itself off and logs one line saying why; textures load as without the mod |
 
 Before the Iris hooks are applied, SpriteStream reads the installed Iris's class files and checks that every

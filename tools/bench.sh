@@ -22,6 +22,9 @@ case $pack in
 	*) echo "unknown pack $pack" >&2; exit 1 ;;
 esac
 sed -i "s|^resourcePacks:.*|resourcePacks:$packs|" run/options.txt
+# Stratum declares formats only up to 88; in-game it has to be force-enabled as "incompatible" too.
+incompatible=$([ "$pack" = stratum2048 ] && echo '["file/Stratum 2048x.zip"]' || echo '[]')
+sed -i "s|^incompatibleResourcePacks:.*|incompatibleResourcePacks:$incompatible|" run/options.txt
 # Nobody touches the keyboard during a run; the default "afk" limit would cap it at 30 fps.
 sed -i 's|^inactivityFpsLimit:.*|inactivityFpsLimit:"minimized"|' run/options.txt
 # BACKEND=vulkan tools/bench.sh ... for the Vulkan backend (default: OpenGL, like Jayden's instance)

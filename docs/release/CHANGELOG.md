@@ -28,6 +28,15 @@ First release.
 - Safe fallback: with an unsupported Iris (older than 1.11, or one whose internals changed) SpriteStream turns
   itself off with one clear log line instead of crashing.
 
+### Performance
+- The screen probe casts a fixed number of rays per second instead of per frame: with shaders off, frame rates
+  went from ~235–510 to ~1200–1860 fps in testing (1440p, Optimum Realism 1024x); with shader packs it frees
+  0.8–1.5 ms of render-thread time per frame.
+- Patched shaders remember the last sprite per pixel, skipping repeated lookups in POM loops (+7% on close-ups
+  with Bliss).
+- No more ~1 s freeze the first time an item appears with a shader pack on: item and chest PBR maps are
+  prepared while the pack loads.
+
 ### Loading
 - PBR packs: `_n`/`_s` maps are no longer decoded at full size just to fill vanilla's block atlas
   (`skipPbrMapsInBlockAtlas`), which shortens loading and lowers RAM use.

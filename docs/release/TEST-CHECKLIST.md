@@ -1,5 +1,9 @@
 # In-game test checklist — 0.1.0-beta.1+26.3
 
+> Most of this list was run in the dev client on 2026-11-06 (OpenGL + Vulkan, RX 9070); results and
+> screenshots are in `docs/perf/RESULTS.md`. What is left for a person: zoom, CTM, items in hand, Mod Menu,
+> and Iris 1.11.7 on Vulkan without SpriteStream (it crashed in testing, apparently in Iris itself).
+
 Jar: `build/libs/spritestream-0.1.0-beta.1+26.3.jar`. Nothing below was run in the game during release prep;
 everything marked **NEW** changed without an in-game check and needs one.
 
