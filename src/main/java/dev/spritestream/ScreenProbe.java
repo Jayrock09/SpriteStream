@@ -41,13 +41,23 @@ public final class ScreenProbe {
 
 	private static final TextureAtlasSprite[] NO_SPRITES = new TextureAtlasSprite[0];
 	private static final int JITTER = 4;
+	/**
+	 * Full probe grids per second. At this frame rate or below every frame casts the whole grid, as before; above it
+	 * the same number of rays per second is spread over the frames, so a high frame rate no longer multiplies the
+	 * probe's cost. The streamer's want windows last 1.5 s, which still see ~90 full jittered grids.
+	 */
+	static final float GRIDS_PER_SECOND = 60.0F;
 	/** Random seeds tried per block state to find all of its weighted model variants. */
 	private static final int VARIANT_SAMPLES = 48;
 
 	/** Sprites per (state, face); index 6 holds the unculled quads used when no face matches. */
 	private final Map<BlockState, TextureAtlasSprite[][]> spriteCache = new IdentityHashMap<>();
 	private final RandomSource random = RandomSource.create();
-	private int frame;
+	/** Jitter step of the grid pass in progress, and the next row of it to cast. */
+	private int step;
+	private int nextRow;
+	private long lastRunNanos;
+	private float rayCredit;
 
 	public void clearCache() {
 		this.spriteCache.clear();
@@ -80,13 +90,18 @@ public final class ScreenProbe {
 
 		int cols = config.probeColumns;
 		int rows = config.probeRows;
-		int step = this.frame++ % (JITTER * JITTER);
-		float jx = ((step % JITTER) + 0.5F) / JITTER;
-		float jy = ((step / JITTER) + 0.5F) / JITTER;
+		int rowsThisFrame = rowsToCast(rows, cols, System.nanoTime());
 		BlockStateModelSet models = minecraft.getModelManager().getBlockStateModelSet();
 		int rays = 0;
 
-		for (int row = 0; row < rows; row++) {
+		for (int done = 0; done < rowsThisFrame; done++) {
+			if (this.nextRow >= rows) {
+				this.nextRow = 0;
+				this.step = (this.step + 1) % (JITTER * JITTER);
+			}
+			int row = this.nextRow++;
+			float jx = ((this.step % JITTER) + 0.5F) / JITTER;
+			float jy = ((this.step / JITTER) + 0.5F) / JITTER;
 			float ndcY = 1.0F - 2.0F * (row + jy) / rows;
 			for (int col = 0; col < cols; col++) {
 				float ndcX = 2.0F * (col + jx) / cols - 1.0F;
@@ -114,6 +129,21 @@ public final class ScreenProbe {
 			}
 		}
 		return rays;
+	}
+
+	/**
+	 * Rows to cast this frame under the {@link #GRIDS_PER_SECOND} budget: the whole grid when the frame took at
+	 * least 1/60 s, a share of it otherwise. Never more than one grid per frame.
+	 */
+	int rowsToCast(final int rows, final int cols, final long nowNanos) {
+		long elapsed = this.lastRunNanos == 0 ? Long.MAX_VALUE : nowNanos - this.lastRunNanos;
+		this.lastRunNanos = nowNanos;
+		int grid = rows * cols;
+		float earned = elapsed >= 1_000_000_000L ? grid : elapsed / 1e9F * GRIDS_PER_SECOND * grid;
+		this.rayCredit = Math.min(this.rayCredit + earned, grid);
+		int count = Math.min(rows, (int) (this.rayCredit / cols));
+		this.rayCredit -= count * cols;
+		return count;
 	}
 
 	private TextureAtlasSprite[] spritesFor(final BlockStateModelSet models, final BlockState state, final BlockPos pos, final Direction face) {
