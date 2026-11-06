@@ -2,6 +2,7 @@ package dev.spritestream.mixin.sodium;
 
 import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
 import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import dev.spritestream.ShaderPatch;
 import dev.spritestream.StreamManager;
 import net.caffeinemc.mods.sodium.client.render.chunk.ShaderChunkRenderer;
 import org.spongepowered.asm.mixin.Mixin;
@@ -20,6 +21,10 @@ public abstract class ShaderChunkRendererMixin {
 		)
 	)
 	private RenderPipeline.Builder spritestream$addBindGroup(final RenderPipeline.Builder builder, final BindGroupLayout layout) {
+		// Unpatched shaders (SpriteStream disabled) must not declare bindings nothing ever binds.
+		if (!ShaderPatch.enabled()) {
+			return builder.withBindGroupLayout(layout);
+		}
 		return builder.withBindGroupLayout(layout).withBindGroupLayout(StreamManager.BIND_GROUP);
 	}
 }

@@ -5,6 +5,9 @@ import org.lwjgl.system.MemoryUtil;
 
 /** CPU-side resampling of RGBA8 images held in native memory. */
 public final class ImageOps {
+	/** {@code -Dspritestream.debug=plainspecular}: the old plain-average specular mips, for before/after comparisons. */
+	static final boolean PLAIN_SPECULAR = SpriteStreamMod.DEBUG.contains("plainspecular");
+
 	private ImageOps() {
 	}
 

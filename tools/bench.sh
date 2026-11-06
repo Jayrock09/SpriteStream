@@ -18,14 +18,19 @@ cp -r run-server/bench "run/saves/SS Bench"
 case $pack in
 	or1024) packs='["vanilla","file/Optimum Realism R4.2.0 1024x.zip"]' ;;
 	vanilla) packs='["vanilla"]' ;;
+	stratum2048) packs='["vanilla","file/Stratum 2048x.zip"]' ;;
 	*) echo "unknown pack $pack" >&2; exit 1 ;;
 esac
 sed -i "s|^resourcePacks:.*|resourcePacks:$packs|" run/options.txt
 # Nobody touches the keyboard during a run; the default "afk" limit would cap it at 30 fps.
 sed -i 's|^inactivityFpsLimit:.*|inactivityFpsLimit:"minimized"|' run/options.txt
+# BACKEND=vulkan tools/bench.sh ... for the Vulkan backend (default: OpenGL, like Jayden's instance)
+sed -i "s|^preferredGraphicsBackend:.*|preferredGraphicsBackend:\"${BACKEND:-opengl}\"|" run/options.txt
 enable=$([ "$shaders" = on ] && echo true || echo false)
 sed -i "s|^enableShaders=.*|enableShaders=$enable|" run/config/iris.properties
 
 rm -rf "run/spritestream-bench/$label"
-./gradlew runClient --no-daemon -q -Piris -Pbench="$label" "$@" > "run/bench-$label.log" 2>&1 || true
+# NOIRIS=1 runs without Iris
+iris=$([ -n "${NOIRIS:-}" ] && echo "" || echo "-Piris")
+./gradlew runClient --no-daemon -q $iris -Pbench="$label" "$@" > "run/bench-$label.log" 2>&1 || true
 cat "run/spritestream-bench/$label/results.csv" 2>/dev/null || { echo "no results for $label"; tail -40 "run/bench-$label.log"; }

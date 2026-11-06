@@ -881,7 +881,7 @@ public final class StreamManager {
 						MemoryUtil.memCopy(src, MemoryUtil.memAddress(levels[level]), (long) lw * lh * 4L);
 					} else if (plane == PoolPage.PLANE_COLOR) {
 						ImageOps.downsample(src, sw, sh, MemoryUtil.memAddress(levels[level]), lw, lh);
-					} else if (plane == PoolPage.PLANE_SPECULAR) {
+					} else if (plane == PoolPage.PLANE_SPECULAR && !ImageOps.PLAIN_SPECULAR) {
 						ImageOps.downsampleSpecular(src, sw, sh, MemoryUtil.memAddress(levels[level]), lw, lh);
 					} else {
 						ImageOps.downsamplePlain(src, sw, sh, MemoryUtil.memAddress(levels[level]), lw, lh);

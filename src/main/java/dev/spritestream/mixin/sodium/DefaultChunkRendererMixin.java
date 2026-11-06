@@ -2,6 +2,7 @@ package dev.spritestream.mixin.sodium;
 
 import com.llamalad7.mixinextras.sugar.Local;
 import com.mojang.renderpearl.api.commands.RenderPass;
+import dev.spritestream.ShaderPatch;
 import dev.spritestream.StreamManager;
 import net.caffeinemc.mods.sodium.client.render.chunk.DefaultChunkRenderer;
 import org.spongepowered.asm.mixin.Mixin;
@@ -22,6 +23,8 @@ public abstract class DefaultChunkRendererMixin {
 		)
 	)
 	private void spritestream$bindPool(final CallbackInfo ci, @Local(argsOnly = true) final RenderPass pass) {
-		StreamManager.get().bind(pass);
+		if (ShaderPatch.enabled()) {
+			StreamManager.get().bind(pass);
+		}
 	}
 }

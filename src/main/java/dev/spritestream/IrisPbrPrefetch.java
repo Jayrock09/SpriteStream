@@ -118,7 +118,7 @@ public final class IrisPbrPrefetch {
 				return null;
 			}
 			NativeImage small = new NativeImage(request.width(), request.height(), false);
-			if (request.location().getPath().endsWith("_s.png")) {
+			if (request.location().getPath().endsWith("_s.png") && !ImageOps.PLAIN_SPECULAR) {
 				ImageOps.downsampleSpecular(image.getPointer(), image.getWidth(), image.getHeight(), small.getPointer(), request.width(), request.height());
 			} else {
 				ImageOps.downsamplePlain(image.getPointer(), image.getWidth(), image.getHeight(), small.getPointer(), request.width(), request.height());

@@ -36,6 +36,8 @@ public final class Benchmark {
 	static final @Nullable String LABEL = System.getProperty("spritestream.bench");
 	public static final boolean ENABLED = LABEL != null && !LABEL.isBlank();
 	private static final float WARMUP_SECONDS = Float.parseFloat(System.getProperty("spritestream.benchWarmup", "25"));
+	/** {@code -Dspritestream.benchScenes=materials}: emissive and metal blocks near and far, by day and night. */
+	private static final String SCENES = System.getProperty("spritestream.benchScenes", "spots");
 	private static final float MEASURE_SECONDS = Float.parseFloat(System.getProperty("spritestream.benchMeasure", "20"));
 
 	/** CPU time inside StreamManager#frame, split up, accumulated while measuring. */
@@ -91,8 +93,12 @@ public final class Benchmark {
 						survey(minecraft);
 						phase = 99;
 					} else {
-						loadSpots(minecraft);
-						rebuildWall(minecraft);
+						if ("materials".equals(SCENES)) {
+							materialSpots(minecraft);
+						} else {
+							loadSpots(minecraft);
+							rebuildWall(minecraft);
+						}
 						spotIndex = 0;
 						goTo(minecraft, spots.get(0));
 						next(now);
@@ -176,7 +182,38 @@ public final class Benchmark {
 
 	private static void goTo(final Minecraft minecraft, final Spot spot) {
 		MinecraftServer server = minecraft.getSingleplayerServer();
-		server.execute(() -> command(server, String.format(Locale.ROOT, "tp @p %.2f %.2f %.2f %.1f %.1f", spot.x(), spot.y(), spot.z(), spot.yaw(), spot.pitch())));
+		server.execute(() -> {
+			command(server, spot.name().startsWith("night") ? "time set 18000" : "time set 6000");
+			command(server, String.format(Locale.ROOT, "tp @p %.2f %.2f %.2f %.1f %.1f", spot.x(), spot.y(), spot.z(), spot.yaw(), spot.pitch()));
+		});
+	}
+
+	/** A platform high above spawn with a row of emissive and metal blocks (LabPBR emission and metal IDs). */
+	private static void materialSpots(final Minecraft minecraft) {
+		MinecraftServer server = minecraft.getSingleplayerServer();
+		BlockPos base = new BlockPos(minecraft.player.blockPosition().getX(), 200, minecraft.player.blockPosition().getZ());
+		BlockState[] row = {
+			Blocks.GLOWSTONE.defaultBlockState(), Blocks.SEA_LANTERN.defaultBlockState(), Blocks.SHROOMLIGHT.defaultBlockState(),
+			Blocks.LANTERN.defaultBlockState(), Blocks.GOLD_BLOCK.defaultBlockState(), Blocks.IRON_BLOCK.defaultBlockState(),
+			Blocks.COPPER_BLOCK.asList().getFirst().defaultBlockState(), Blocks.DIAMOND_BLOCK.defaultBlockState(), Blocks.REDSTONE_BLOCK.defaultBlockState(),
+			Blocks.STONE_BRICKS.defaultBlockState()
+		};
+		server.execute(() -> {
+			ServerLevel level = server.overworld();
+			for (int x = -2; x <= row.length * 2; x++) {
+				for (int z = -1; z <= 4; z++) {
+					level.setBlock(base.offset(x, 0, z), Blocks.SMOOTH_STONE.defaultBlockState(), 2);
+				}
+			}
+			for (int i = 0; i < row.length; i++) {
+				level.setBlock(base.offset(i * 2, 1, 2), row[i], 2);
+			}
+		});
+		double cx = base.getX() + row.length + 0.5;
+		for (String time : new String[] {"day", "night"}) {
+			spots.add(new Spot(time + "-near", cx, 200.6, base.getZ() - 6.0, 0.0F, 12.0F));
+			spots.add(new Spot(time + "-far", cx, 200.6, base.getZ() - 38.0, 0.0F, 2.5F));
+		}
 	}
 
 	// ---------------------------------------------------------------- survey

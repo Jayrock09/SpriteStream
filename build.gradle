@@ -64,6 +64,9 @@ loom {
 				if (project.hasProperty("benchMeasure")) {
 					vmArg "-Dspritestream.benchMeasure=" + project.property("benchMeasure")
 				}
+				if (project.hasProperty("benchScenes")) {
+					vmArg "-Dspritestream.benchScenes=" + project.property("benchScenes")
+				}
 				if (project.hasProperty("benchWarmup")) {
 					vmArg "-Dspritestream.benchWarmup=" + project.property("benchWarmup")
 				}
@@ -103,9 +106,17 @@ dependencies {
 		compileOnly files(irisJar)
 		// IrisHookCheckTest checks the hooks against this jar's class files.
 		testRuntimeOnly files(irisJar)
-		// gradlew runClient -Piris adds Iris so shader-pack (PBR/POM) streaming can be tested
+		// gradlew runClient -Piris adds Iris so shader-pack (PBR/POM) streaming can be tested.
+		// -PirisRuntime=111 runs with Iris 1.11.7 instead; -PirisRuntime=<path to jar> with any other Iris.
 		if (project.hasProperty("iris")) {
-			runtimeOnly files(irisJar)
+			def runtime = project.findProperty("irisRuntime")?.toString()
+			if (runtime == "111") {
+				runtimeOnly("maven.modrinth:iris:${project.iris111_version}") { transitive = false }
+			} else if (runtime != null) {
+				runtimeOnly files(runtime)
+			} else {
+				runtimeOnly files(irisJar)
+			}
 		}
 	}
 	// Test client only: connected/random textures (OptiFine CTM format), used by packs like Optimum Realism.
