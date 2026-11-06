@@ -23,7 +23,12 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Feeds Iris's block-atlas PBR build from {@link IrisPbrPrefetch} instead of decoding full-size maps one by one. */
+/**
+ * Feeds Iris's PBR atlas builds from {@link IrisPbrPrefetch} instead of decoding full-size maps one by one on the
+ * render thread. Maps are shrunk while the resource pack loads (block atlas and the capped atlases: items, chests,
+ * ...) and kept for the reload, so turning shaders on or off reuses them; anything not cached by then is shrunk
+ * in parallel right before Iris's build.
+ */
 @Mixin(value = AtlasPBRLoader.class, remap = false)
 public abstract class AtlasPBRLoaderMixin {
 	@Shadow
@@ -34,7 +39,7 @@ public abstract class AtlasPBRLoaderMixin {
 	private void spritestream$prefetch(
 		final TextureAtlas atlas, final ResourceManager resourceManager, final PBRTextureLoader.PBRTextureConsumer consumer, final CallbackInfo ci
 	) {
-		if (!BaseAtlasLoader.isActive() || !TextureAtlas.LOCATION_BLOCKS.equals(atlas.location())) {
+		if (!BaseAtlasLoader.isActive()) {
 			return;
 		}
 		List<IrisPbrPrefetch.Request> requests = new ArrayList<>();

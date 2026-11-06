@@ -1,5 +1,7 @@
 package dev.spritestream.mixin;
 
+import com.llamalad7.mixinextras.sugar.Local;
+import net.minecraft.server.packs.resources.ResourceManager;
 import dev.spritestream.BaseAtlasLoader;
 import dev.spritestream.SpriteStreamMod;
 import java.util.Set;
@@ -31,9 +33,11 @@ public abstract class SpriteLoaderMixin {
 			target = "Lnet/minecraft/client/renderer/texture/atlas/SpriteResourceLoader;create(Ljava/util/Set;)Lnet/minecraft/client/renderer/texture/atlas/SpriteResourceLoader;"
 		)
 	)
-	private SpriteResourceLoader spritestream$wrapLoader(final Set<MetadataSectionType<?>> additionalMetadata) {
+	private SpriteResourceLoader spritestream$wrapLoader(
+		final Set<MetadataSectionType<?>> additionalMetadata, @Local(argsOnly = true) final ResourceManager resources
+	) {
+		BaseAtlasLoader.beginReload(resources);
 		if (TextureAtlas.LOCATION_BLOCKS.equals(this.location)) {
-			BaseAtlasLoader.beginLoad();
 			return BaseAtlasLoader.createForBlocks(additionalMetadata);
 		}
 		// GUI sprites carry nine-slice borders in pixels, so shrinking them would break their layout.

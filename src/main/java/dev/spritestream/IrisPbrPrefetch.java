@@ -43,7 +43,7 @@ public final class IrisPbrPrefetch {
 		return sprite.withPath(path -> "textures/" + path + suffix + ".png");
 	}
 
-	/** Called while the block atlas loads: shrink this sprite's PBR maps to the base sprite size. */
+	/** Called while an atlas loads: shrink this sprite's PBR maps to the size its sprite was shrunk to. */
 	public static void cacheDuringLoad(final Identifier sprite, final Resource colourResource, final int width, final int height,
 		final net.minecraft.server.packs.resources.ResourceManager resources) {
 		for (String suffix : SUFFIXES) {

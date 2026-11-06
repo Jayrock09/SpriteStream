@@ -38,8 +38,18 @@ public final class BaseAtlasLoader {
 	private BaseAtlasLoader() {
 	}
 
-	/** Called when the block atlas starts loading; clears the previous reload's sources. */
-	public static void beginLoad() {
+	/** The resource manager of the reload in progress; a new one is created for every reload. */
+	private static @org.jspecify.annotations.Nullable Object currentReload;
+
+	/**
+	 * Called when any atlas starts loading. Atlases load in parallel, so the first one of a reload (whichever it is)
+	 * clears the previous reload's sources and cached PBR maps and decides what this reload does.
+	 */
+	public static synchronized void beginReload(final Object resourceManager) {
+		if (resourceManager == currentReload) {
+			return;
+		}
+		currentReload = resourceManager;
 		sources = new ConcurrentHashMap<>();
 		IrisPbrPrefetch.clear();
 		activeForCurrentLoad = SpriteStreamMod.shouldStream();
@@ -193,7 +203,8 @@ public final class BaseAtlasLoader {
 		}
 		NativeImage base = ImageOps.shrinkTo(image, cap);
 		image.close();
-		if (recordSource && preparePbrForCurrentLoad) {
+		// Iris builds PBR atlases for the capped atlases (items, chests, ...) too; shrink their maps now as well.
+		if (preparePbrForCurrentLoad) {
 			IrisPbrPrefetch.cacheDuringLoad(
 				spriteLocation, resource, base.getWidth(), base.getHeight(), net.minecraft.client.Minecraft.getInstance().getResourceManager()
 			);
