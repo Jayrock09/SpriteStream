@@ -1,5 +1,8 @@
 # Modrinth page — SpriteStream
 
+> **ON HOLD (Nov 2026).** Release target is CurseForge for now (see `CURSEFORGE.md`). Modrinth's content rules
+> (section 6, Aug 2026) do not allow mostly-AI-written projects to be public. Kept for later.
+
 **Name:** SpriteStream
 **Summary (one line, ≤ 256 chars):** Run 512x–2048x texture packs (LabPBR/POM included) in a fixed VRAM budget. Block textures stay small until they actually cover pixels on screen.
 **Categories:** Optimization, Utility · **Environment:** Client only · **Loader:** Fabric · **Game version:** 26.3
