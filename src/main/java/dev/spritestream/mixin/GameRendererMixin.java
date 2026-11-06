@@ -1,6 +1,8 @@
 package dev.spritestream.mixin;
 
+import dev.spritestream.Benchmark;
 import dev.spritestream.StreamManager;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.renderer.GameRenderer;
 import org.spongepowered.asm.mixin.Mixin;
@@ -13,6 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class GameRendererMixin {
 	@Inject(method = "update", at = @At("TAIL"))
 	private void spritestream$frame(final DeltaTracker deltaTracker, final CallbackInfo ci) {
+		Benchmark.frame(Minecraft.getInstance());
 		StreamManager.get().frame();
 	}
 }

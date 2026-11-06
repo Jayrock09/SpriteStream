@@ -51,6 +51,23 @@ loom {
 				programArgs "--quickPlaySingleplayer", project.property("testWorld").toString(), "--width", "1920", "--height", "1080"
 				vmArg "-Dspritestream.test=true"
 			}
+			// gradlew runClient -Pbench=<label> runs the benchmark (see Benchmark, tools/bench.sh) in run/saves/SS Bench
+			if (project.hasProperty("bench")) {
+				// Jayden plays at 2560x1440; -PbenchSize=1920x1080 for a smaller window
+				def size = (project.findProperty("benchSize") ?: "2560x1440").toString().split("x")
+				programArgs "--quickPlaySingleplayer", "SS Bench", "--width", size[0], "--height", size[1]
+				vmArg "-Dspritestream.bench=" + project.property("bench")
+				vmArg "-Xmx4096m"
+				if (project.hasProperty("benchSpots")) {
+					vmArg "-Dspritestream.benchSpots=" + project.property("benchSpots")
+				}
+				if (project.hasProperty("benchMeasure")) {
+					vmArg "-Dspritestream.benchMeasure=" + project.property("benchMeasure")
+				}
+				if (project.hasProperty("benchWarmup")) {
+					vmArg "-Dspritestream.benchWarmup=" + project.property("benchWarmup")
+				}
+			}
 			// gradlew runClient -PssDebug=aniso1,coloronly turns on debug switches (see SpriteStreamMod.DEBUG)
 			if (project.hasProperty("ssDebug")) {
 				vmArg "-Dspritestream.debug=" + project.property("ssDebug")

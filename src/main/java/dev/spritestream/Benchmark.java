@@ -1,0 +1,346 @@
+package dev.spritestream;
+
+import com.mojang.blaze3d.platform.NativeImage;
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.Screenshot;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.BiomeTags;
+import net.minecraft.tags.StructureTags;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.Heightmap;
+import org.jspecify.annotations.Nullable;
+
+/**
+ * Development-only benchmark, enabled with {@code -Dspritestream.bench=<label>} (or {@code survey}). It flies a
+ * spectator camera to fixed spots in a fixed-seed world, waits for chunks and streaming to settle, then records
+ * every frame time for a fixed period, plus the CPU time SpriteStream spends per frame. Results go to
+ * {@code spritestream-bench/<label>/} in the game directory.
+ * <ul>
+ * <li>{@code survey}: finds the spots (spawn close-up wall, a high landscape view, a village, a forest) and
+ * writes them to {@code spritestream-bench/spots.txt}, so later runs use identical coordinates.</li>
+ * </ul>
+ */
+public final class Benchmark {
+	static final @Nullable String LABEL = System.getProperty("spritestream.bench");
+	public static final boolean ENABLED = LABEL != null && !LABEL.isBlank();
+	private static final float WARMUP_SECONDS = Float.parseFloat(System.getProperty("spritestream.benchWarmup", "25"));
+	private static final float MEASURE_SECONDS = Float.parseFloat(System.getProperty("spritestream.benchMeasure", "20"));
+
+	/** CPU time inside StreamManager#frame, split up, accumulated while measuring. */
+	public static long streamNanos;
+	public static long probeNanos;
+	public static long assignNanos;
+	public static long uploadNanos;
+	public static long rays;
+
+	private record Spot(String name, double x, double y, double z, float yaw, float pitch) {
+	}
+
+	private static long startNanos = -1;
+	private static int phase;
+	private static int spotIndex;
+	private static long phaseStart;
+	private static long lastFrame;
+	private static final List<Spot> spots = new ArrayList<>();
+	private static long[] frameTimes = new long[1 << 16];
+	private static int frameCount;
+	private static final List<String> results = new ArrayList<>();
+
+	private Benchmark() {
+	}
+
+	private static File dir(final Minecraft minecraft) {
+		return new File(minecraft.gameDirectory, "spritestream-bench");
+	}
+
+	public static void frame(final Minecraft minecraft) {
+		if (!ENABLED || minecraft.player == null || minecraft.level == null) {
+			return;
+		}
+		long now = System.nanoTime();
+		if (startNanos < 0) {
+			if (minecraft.gui.screen() != null) {
+				return;
+			}
+			startNanos = now;
+			phaseStart = now;
+		}
+		float inPhase = (now - phaseStart) / 1e9F;
+		switch (phase) {
+			case 0 -> {
+				if (inPhase > 3.0F) {
+					setUp(minecraft);
+					next(now);
+				}
+			}
+			case 1 -> {
+				if (inPhase > 2.0F) {
+					if ("survey".equals(LABEL)) {
+						survey(minecraft);
+						phase = 99;
+					} else {
+						loadSpots(minecraft);
+						rebuildWall(minecraft);
+						spotIndex = 0;
+						goTo(minecraft, spots.get(0));
+						next(now);
+					}
+				}
+			}
+			case 2 -> { // warm-up at the current spot
+				hold(minecraft);
+				if (inPhase > WARMUP_SECONDS) {
+					frameCount = 0;
+					streamNanos = probeNanos = assignNanos = uploadNanos = rays = 0;
+					lastFrame = now;
+					next(now);
+				}
+			}
+			case 3 -> { // measuring
+				hold(minecraft);
+				if (frameCount < frameTimes.length) {
+					frameTimes[frameCount++] = now - lastFrame;
+				}
+				lastFrame = now;
+				if (inPhase > MEASURE_SECONDS) {
+					Spot spot = spots.get(spotIndex);
+					record(minecraft, spot);
+					screenshot(minecraft, new File(dir(minecraft), LABEL + "/" + spot.name() + ".png"));
+					next(now);
+				}
+			}
+			case 4 -> { // let the screenshot finish, then move on
+				hold(minecraft);
+				if (inPhase > 1.0F) {
+					spotIndex++;
+					if (spotIndex < spots.size()) {
+						goTo(minecraft, spots.get(spotIndex));
+						phase = 2;
+						phaseStart = now;
+					} else {
+						writeResults(minecraft);
+						phase = 99;
+					}
+				}
+			}
+			case 99 -> {
+				phase = 100;
+				minecraft.stop();
+			}
+			default -> {
+			}
+		}
+	}
+
+	private static void next(final long now) {
+		phase++;
+		phaseStart = now;
+	}
+
+	private static void hold(final Minecraft minecraft) {
+		Spot spot = spots.get(spotIndex);
+		minecraft.player.setYRot(spot.yaw());
+		minecraft.player.setXRot(spot.pitch());
+		minecraft.player.setYHeadRot(spot.yaw());
+	}
+
+	private static void command(final MinecraftServer server, final String command) {
+		server.getCommands().performPrefixedCommand(server.createCommandSourceStack().withSuppressedOutput(), command);
+	}
+
+	private static void setUp(final Minecraft minecraft) {
+		MinecraftServer server = minecraft.getSingleplayerServer();
+		if (server == null) {
+			return;
+		}
+		server.execute(() -> {
+			command(server, "gamemode spectator @p");
+			command(server, "time set 6000");
+			command(server, "time pause");
+			command(server, "weather clear 1000000");
+			command(server, "difficulty peaceful");
+		});
+	}
+
+	private static void goTo(final Minecraft minecraft, final Spot spot) {
+		MinecraftServer server = minecraft.getSingleplayerServer();
+		server.execute(() -> command(server, String.format(Locale.ROOT, "tp @p %.2f %.2f %.2f %.1f %.1f", spot.x(), spot.y(), spot.z(), spot.yaw(), spot.pitch())));
+	}
+
+	// ---------------------------------------------------------------- survey
+
+	private static void survey(final Minecraft minecraft) {
+		MinecraftServer server = minecraft.getSingleplayerServer();
+		BlockPos start = minecraft.player.blockPosition();
+		server.execute(() -> {
+			ServerLevel level = server.overworld();
+			List<String> lines = new ArrayList<>();
+			int groundY = surface(level, start.getX(), start.getZ());
+			BlockPos ground = new BlockPos(start.getX(), groundY, start.getZ());
+			buildWall(level, ground);
+			// Close-up: a wall of stone bricks, bricks and logs 2.5 blocks ahead (south), filling most of the view.
+			lines.add(spot("closeup", ground.getX() + 0.5, groundY + 0.5, ground.getZ() + 0.5, 0.0F, 15.0F));
+			// Landscape: 40 blocks above spawn, looking out slightly downwards.
+			lines.add(spot("landscape", ground.getX() + 0.5, groundY + 40, ground.getZ() + 0.5, 30.0F, 18.0F));
+			BlockPos village = level.findNearestMapStructure(StructureTags.VILLAGE, start, 100, false);
+			if (village != null) {
+				int vy = surface(level, village.getX(), village.getZ());
+				lines.add(spot("village", village.getX() - 20.5, vy + 10, village.getZ() + 0.5, -90.0F, 20.0F));
+			}
+			var forest = level.findClosestBiome3d(biome -> biome.is(BiomeTags.IS_FOREST), start, 6400, 32, 64);
+			if (forest != null) {
+				BlockPos f = forest.getFirst();
+				int fy = surfaceNoLeaves(level, f.getX(), f.getZ());
+				lines.add(spot("forest", f.getX() + 0.5, fy + 1.0, f.getZ() + 0.5, 45.0F, 0.0F));
+			}
+			File file = new File(dir(minecraft), "spots.txt");
+			file.getParentFile().mkdirs();
+			try {
+				Files.write(file.toPath(), lines, StandardCharsets.UTF_8);
+				SpriteStreamMod.LOGGER.info("[SpriteStream] Bench spots written to {}: {}", file, lines);
+			} catch (IOException e) {
+				SpriteStreamMod.LOGGER.error("[SpriteStream] Could not write {}", file, e);
+			}
+		});
+	}
+
+	private static String spot(final String name, final double x, final double y, final double z, final float yaw, final float pitch) {
+		return String.format(Locale.ROOT, "%s %.2f %.2f %.2f %.1f %.1f", name, x, y, z, yaw, pitch);
+	}
+
+	private static int surface(final ServerLevel level, final int x, final int z) {
+		level.getChunk(x >> 4, z >> 4);
+		return level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
+	}
+
+	private static int surfaceNoLeaves(final ServerLevel level, final int x, final int z) {
+		level.getChunk(x >> 4, z >> 4);
+		return level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+	}
+
+	/** Same wall as the visual test: stone bricks, bricks and jungle logs, 3 blocks south of the camera. */
+	private static void buildWall(final ServerLevel level, final BlockPos base) {
+		BlockState air = Blocks.AIR.defaultBlockState();
+		for (int x = -9; x <= 11; x++) {
+			for (int y = 0; y <= 5; y++) {
+				for (int z = -1; z <= 2; z++) {
+					level.setBlock(base.offset(x, y, z), air, 3);
+				}
+				BlockState wall = x < -4 ? Blocks.STONE_BRICKS.defaultBlockState()
+					: x < 0 ? Blocks.BRICKS.defaultBlockState() : Blocks.JUNGLE_LOG.defaultBlockState();
+				level.setBlock(base.offset(x, y - 1, 3), wall, 3);
+			}
+		}
+	}
+
+	/** Each run starts from the pristine world, so the close-up wall is built again where the survey put it. */
+	private static void rebuildWall(final Minecraft minecraft) {
+		MinecraftServer server = minecraft.getSingleplayerServer();
+		for (Spot spot : spots) {
+			if (spot.name().equals("closeup")) {
+				BlockPos ground = BlockPos.containing(spot.x(), spot.y(), spot.z());
+				server.execute(() -> buildWall(server.overworld(), ground));
+			}
+		}
+	}
+
+	private static void loadSpots(final Minecraft minecraft) {
+		File file = new File(dir(minecraft), "spots.txt");
+		try {
+			for (String line : Files.readAllLines(file.toPath(), StandardCharsets.UTF_8)) {
+				String[] p = line.trim().split("\\s+");
+				if (p.length == 6) {
+					spots.add(new Spot(p[0], Double.parseDouble(p[1]), Double.parseDouble(p[2]), Double.parseDouble(p[3]),
+						Float.parseFloat(p[4]), Float.parseFloat(p[5])));
+				}
+			}
+		} catch (IOException e) {
+			throw new IllegalStateException("Run the survey first (-Pbench=survey): " + file, e);
+		}
+		String only = System.getProperty("spritestream.benchSpots");
+		if (only != null) {
+			List<String> keep = Arrays.asList(only.split(","));
+			spots.removeIf(s -> !keep.contains(s.name()));
+		}
+	}
+
+	// ---------------------------------------------------------------- results
+
+	private static void record(final Minecraft minecraft, final Spot spot) {
+		int n = frameCount;
+		if (n < 2) {
+			return;
+		}
+		long[] times = Arrays.copyOf(frameTimes, n);
+		long total = 0;
+		for (long t : times) {
+			total += t;
+		}
+		long[] sorted = times.clone();
+		Arrays.sort(sorted);
+		int worst = Math.max(1, n / 100);
+		long worstTotal = 0;
+		for (int i = n - worst; i < n; i++) {
+			worstTotal += sorted[i];
+		}
+		double avgMs = total / 1e6 / n;
+		double lowFps = 1e9 / ((double) worstTotal / worst);
+		double p50 = sorted[n / 2] / 1e6;
+		double p99 = sorted[Math.min(n - 1, (int) (n * 0.99))] / 1e6;
+		String line = String.format(
+			Locale.ROOT, "%s,%s,%d,%.1f,%.1f,%.2f,%.2f,%.2f,%.3f,%.3f,%.3f,%.3f,%.0f,%s",
+			LABEL, spot.name(), n, 1000.0 / avgMs, lowFps, avgMs, p50, p99,
+			streamNanos / 1e6 / n, probeNanos / 1e6 / n, assignNanos / 1e6 / n, uploadNanos / 1e6 / n, (double) rays / n,
+			StreamManager.get().benchUsage()
+		);
+		results.add(line);
+		SpriteStreamMod.LOGGER.info("[SpriteStream] BENCH {}", line);
+		File dir = new File(dir(minecraft), LABEL);
+		dir.mkdirs();
+		try (PrintWriter out = new PrintWriter(new File(dir, "frametimes-" + spot.name() + ".csv"), StandardCharsets.UTF_8)) {
+			out.println("frame,ms");
+			for (int i = 0; i < n; i++) {
+				out.printf(Locale.ROOT, "%d,%.3f%n", i, times[i] / 1e6);
+			}
+		} catch (IOException e) {
+			SpriteStreamMod.LOGGER.error("[SpriteStream] Could not write frame times", e);
+		}
+	}
+
+	private static void writeResults(final Minecraft minecraft) {
+		File file = new File(dir(minecraft), LABEL + "/results.csv");
+		file.getParentFile().mkdirs();
+		List<String> lines = new ArrayList<>();
+		lines.add("label,scene,frames,avg_fps,low1_fps,avg_ms,p50_ms,p99_ms,ss_cpu_ms,probe_ms,assign_ms,upload_ms,rays_per_frame,pool");
+		lines.addAll(results);
+		try {
+			Files.write(file.toPath(), lines, StandardCharsets.UTF_8);
+			SpriteStreamMod.LOGGER.info("[SpriteStream] Bench results written to {}", file);
+		} catch (IOException e) {
+			SpriteStreamMod.LOGGER.error("[SpriteStream] Could not write {}", file, e);
+		}
+	}
+
+	private static void screenshot(final Minecraft minecraft, final File file) {
+		file.getParentFile().mkdirs();
+		Screenshot.takeScreenshot(minecraft.gameRenderer.mainRenderTarget(), (NativeImage image) -> {
+			try (image) {
+				image.writeToFile(file);
+			} catch (IOException e) {
+				SpriteStreamMod.LOGGER.error("[SpriteStream] Could not save {}", file, e);
+			}
+		});
+	}
+}

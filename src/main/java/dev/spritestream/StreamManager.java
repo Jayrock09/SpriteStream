@@ -51,6 +51,8 @@ import org.lwjgl.system.MemoryUtil;
  * </ol>
  */
 public final class StreamManager {
+	/** {@code -Dspritestream.debug=noprobe}: never casts probe rays, so nothing is streamed (for measuring). */
+	private static final boolean NO_PROBE = SpriteStreamMod.DEBUG.contains("noprobe");
 	public static final BindGroupLayout BIND_GROUP = BindGroupLayout.builder()
 		.withUniform("ss_IdMap", UniformType.COMBINED_IMAGE_SAMPLER)
 		.withUniform("ss_Table", UniformType.COMBINED_IMAGE_SAMPLER)
@@ -375,6 +377,10 @@ public final class StreamManager {
 		if (!RenderSystem.isOnRenderThread()) {
 			return;
 		}
+		if (SpriteStreamMod.DISABLED) {
+			return;
+		}
+		long frameStart = System.nanoTime();
 		this.ensureCommonResources();
 		this.frame++;
 		Minecraft minecraft = Minecraft.getInstance();
@@ -405,7 +411,8 @@ public final class StreamManager {
 				}
 			}
 
-			this.raysThisInterval += this.probe.run(minecraft, config, (state, sprites, texelsPerBlock) -> {
+			long probeStart = System.nanoTime();
+			int cast = NO_PROBE ? 0 : this.probe.run(minecraft, config, (state, sprites, texelsPerBlock) -> {
 				for (TextureAtlasSprite sprite : sprites) {
 					StreamedSprite s = this.byAtlasSprite.get(sprite);
 					if (s != null) {
@@ -426,12 +433,22 @@ public final class StreamManager {
 					wantOverlay(overlay, texelsPerBlock);
 				}
 			});
+			this.raysThisInterval += cast;
+			long assignStart = System.nanoTime();
+			if (Benchmark.ENABLED) {
+				Benchmark.probeNanos += assignStart - probeStart;
+				Benchmark.rays += cast;
+			}
 
 			if (this.frame % ASSIGN_INTERVAL_FRAMES == 0) {
 				this.assign();
 			}
+			if (Benchmark.ENABLED) {
+				Benchmark.assignNanos += System.nanoTime() - assignStart;
+			}
 		}
 
+		long uploadStart = System.nanoTime();
 		CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
 		this.collectDecoded();
 		this.processUploads(encoder, (long) config.uploadMiBPerFrame << 20);
@@ -442,10 +459,28 @@ public final class StreamManager {
 			this.tableDirty = false;
 		}
 
+		if (Benchmark.ENABLED) {
+			long end = System.nanoTime();
+			Benchmark.uploadNanos += end - uploadStart;
+			Benchmark.streamNanos += end - frameStart;
+		}
+
 		if (config.logStats && now - this.lastStats > 5_000_000_000L) {
 			this.logStats(now);
 		}
 		TestHarness.frame(minecraft);
+	}
+
+	/** One-word-per-field pool summary for benchmark CSVs. */
+	public String benchUsage() {
+		PoolPage page = this.page;
+		int resident = 0;
+		for (int i = 1; i < this.sprites.length; i++) {
+			if (this.sprites[i].residentResolution > 0) {
+				resident++;
+			}
+		}
+		return page == null ? "no-pool" : (page.usedCells() * 100 / page.totalCells()) + "%-full " + page.planeCount + "-planes " + resident + "-resident";
 	}
 
 	private static void want(final StreamedSprite s, final float texelsPerBlock) {

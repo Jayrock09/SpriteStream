@@ -24,7 +24,7 @@ public abstract class TransformPatcherMixin {
 		final String name, final String vertex, final String geometry, final String tessControl, final String tessEval, final String fragment,
 		final AlphaTest alpha, final Object2ObjectMap<?, String> textureMap, final Set<String> textureOverrides, final boolean shadow
 	) {
-		if (result == null || shadow || result.get(PatchShaderType.FRAGMENT) == null) {
+		if (result == null || shadow || result.get(PatchShaderType.FRAGMENT) == null || !ShaderPatch.enabled()) {
 			return result;
 		}
 		// The result is cached by Iris, so patch a copy rather than the cached map.

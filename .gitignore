@@ -29,3 +29,4 @@ Thumbs.db
 # Local copies of unreleased dependency jars (see local.properties)
 libs/
 /logs/
+/run-server/

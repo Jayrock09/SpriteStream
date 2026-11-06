@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.At;
 public abstract class ShaderConfigsMixin {
 	@ModifyReturnValue(method = "getShader", at = @At("RETURN"))
 	private String spritestream$patch(final String source, final Identifier id, final ShaderType type) {
-		if (source != null && type == ShaderType.FRAGMENT && ShaderPatch.SODIUM_TERRAIN.equals(id)) {
+		if (source != null && type == ShaderType.FRAGMENT && ShaderPatch.SODIUM_TERRAIN.equals(id) && ShaderPatch.enabled()) {
 			return ShaderPatch.patchSodiumFragment(source);
 		}
 		return source;

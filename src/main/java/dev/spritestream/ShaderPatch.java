@@ -132,6 +132,14 @@ public final class ShaderPatch {
 	private ShaderPatch() {
 	}
 
+	/**
+	 * False when SpriteStream is disabled ({@code -Dspritestream.disabled}) or with {@code -Dspritestream.debug=nopatch},
+	 * which leaves the terrain shaders exactly as without the mod (for measuring the lookup's cost).
+	 */
+	public static boolean enabled() {
+		return !SpriteStreamMod.DISABLED && !SpriteStreamMod.DEBUG.contains("nopatch");
+	}
+
 	// ---------------------------------------------------------------- Sodium (no shader pack)
 
 	public static String patchSodiumFragment(final String source) {
