@@ -34,6 +34,7 @@ First release.
   0.8–1.5 ms of render-thread time per frame.
 - Patched shaders remember the last sprite per pixel, skipping repeated lookups in POM loops (+7% on close-ups
   with Bliss).
+- Zooming in (spyglass, zoom mods) no longer makes the probe expensive (6.9 → 1.7 ms per frame).
 - No more ~1 s freeze the first time an item appears with a shader pack on: item and chest PBR maps are
   prepared while the pack loads.
 

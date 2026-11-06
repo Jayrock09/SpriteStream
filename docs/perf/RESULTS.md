@@ -33,6 +33,21 @@ Cells are **average fps (1% low)**.
 - (a) vs (a′): the remaining SpriteStream cost with Bliss is in the patched shaders, mostly POM sampling
   1024x data instead of 64x — the price of the detail itself.
 
+## Vulkan (Bliss on, Iris 1.12)
+
+Jayden's instance is set to **OpenGL** (`preferredGraphicsBackend:"opengl"`; every session since 29 Oct logged
+OpenGL, the two before that Vulkan), so the tables above are his current setup. Same benchmark on Vulkan:
+
+| | close-up | landscape | village | forest |
+|---|---|---|---|---|
+| before (`0044e29`'s streaming code) | 129 (107) / 129 (103) | 126 (109) / 127 (95) | 118 (87) / 117 (86) | 116 (98) / 116 (99) |
+| **after** | **139 (106) / 139 (108)** | **122 (106) / 124 (109)** | **119 (92) / 118 (57)** | **117 (103) / 116 (101)** |
+| after, without the shader memo (isolation) | 129 (107) / 130 (109) | 125 (109) / 123 (109) | 116 (94) / 118 (99) | 112 (98) / 112 (98) |
+
+The landscape's 2–3 fps lower is the same with and without the memo, and within the 4–5 fps this scene
+varies between sessions (OpenGL landscape ranged 115–120 across this afternoon's runs), so it is not a
+regression from these changes. The memo is worth +7% on the close-up and +3.5% in the forest on Vulkan.
+
 ## Shaders off
 
 | | close-up | landscape | village | forest |
@@ -60,7 +75,13 @@ Cells are **average fps (1% low)**.
    pack. The same commit fixes a race where the item atlas could load before the block atlas and miss the
    per-reload reset. Commit `c9640fb`.
 
-Tried and dropped: skipping the base-atlas read when a texture is fully faded in (identical output, but
+4. **Zooming (spyglass) made the probe expensive: 6.9 ms per frame.** A narrow field of view lets rays reach
+   far. Rays now stop at the render distance, and the probe stops after 1.5 ms in a frame and finishes the
+   grid over the next frames. Zoomed: probe 6.9 → 1.7 ms, 104/106 → 113/111 fps, 1% low 56/81 → 99/96; the
+   zoomed wall still streams at 256. Commit `a69ff78`.
+
+Tried and dropped: reading only the slot first when filling the shader memo (no measurable difference);
+skipping the base-atlas read when a texture is fully faded in (identical output, but
 123.2/130.1/123.4 vs 123.0/122.9/122.8 fps — within noise).
 
 ## Quality — screenshot pairs (`img/`)
@@ -103,4 +124,7 @@ Same machine and setup as above. "Not run" items need a person (or Mod Menu, whi
 | VRAM flat while moving (Bliss, 1440p) | **PASS** — game total ~4.8 GB dedicated, flat; 3.9 GB with shaders off |
 | Load time, Stratum 2048x | without Iris: 46 s → **24 s** with `skipPbrMapsInBlockAtlas`; with Iris ~46 s either way (the maps are prepared for Iris during load) |
 | No flat purple/black blocks from the PBR placeholders | **PASS** in all screenshots |
-| Zoom (spyglass), CTM glass/bookshelves, items in hand, Mod Menu entry | Not run |
+| Zoom (real spyglass, wall 48 blocks away) | **PASS** — without zoom the wall wants only the base texture; spyglass up, bricks/jungle log/stone bricks and their CTM variants stream at 256 (`img/zoom-off-on.jpg`). Found and fixed the 6.9 ms probe cost while zoomed (item 4 above). |
+| Connected textures: glass, bookshelves, sandstone (Continuity) | **PASS** — base and CTM tiles (`ctm/glass/2-5`, `ctm/bookshelf/1-3`, `ctm/sandstone/2-4`) all stream at 512; bookshelves join seamlessly (`img/ctm-glass-bookshelf-sandstone.jpg`) |
+| Item in hand (diamond sword, Bliss) | **PASS** (`img/item-in-hand.jpg`) |
+| Mod Menu entry (Mod Menu 21.0.0) | **PASS** — icon, `v0.1.0-beta.1+26.3`, by Jayrock09, description, Website/Issues buttons, Source link, LGPL-3.0-only (`img/modmenu-entry.jpg`) |
