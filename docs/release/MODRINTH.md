@@ -5,7 +5,7 @@
 **Categories:** Optimization, Utility · **Environment:** Client only · **Loader:** Fabric · **Game version:** 26.3
 **License:** LGPL-3.0-only · **Source:** https://github.com/Jayrock09/SpriteStream (repo is private — make it public or drop the link before publishing)
 **Version:** 0.1.0-beta.1+26.3 · **Release channel:** Beta
-**Dependencies:** Sodium (required, 0.9.2+), Iris (optional, 1.12+), Continuity (optional)
+**Dependencies:** Sodium (required, 0.9.2+), Iris (optional, 1.11+), Continuity (optional)
 
 ---
 
@@ -25,7 +25,7 @@ grows past what you set.
 ### Features
 - 512x, 1024x and 2048x block textures within a fixed VRAM budget (2.5 GB by default, configurable)
 - Resolution chosen per texture from how many **screen pixels** it covers, not from distance
-- **Shader packs (Iris 1.12+):** colour, normal and specular (LabPBR) maps stream together; POM keeps working
+- **Shader packs (Iris 1.11+):** colour, normal and specular (LabPBR) maps stream together; POM keeps working
 - **Connected textures** (Continuity / OptiFine CTM format) stream like any other block texture
 - Upgrades decode in the background and fade in; uploads are rate-limited per frame to avoid stutter
 - No vendor-specific code: built on Minecraft's own render API (tested on Vulkan; OpenGL and AMD reports welcome)
@@ -33,8 +33,12 @@ grows past what you set.
 ### Requirements
 - Minecraft 26.3, Fabric Loader 0.19+
 - **Sodium** 0.9.2 or newer (0.9.x)
-- Optional: **Iris 1.12+** for shader packs. With an older Iris installed, SpriteStream turns itself off and
-  says so in the log (textures then load as if it was not installed).
+- Optional: **Iris 1.11 or newer** for shader packs.
+  - Iris 1.12+: shader packs on Vulkan and OpenGL.
+  - Iris 1.11.x: shader packs on OpenGL (Iris 1.11 itself does not run shader packs on Vulkan; there you get
+    streaming without shaders).
+  - With an older Iris, or one SpriteStream does not recognise, it turns itself off and says so in the log
+    (textures then load as if it was not installed) — it will not crash the game.
 - Optional: **Continuity** for connected textures
 
 ### What is not streamed (yet)

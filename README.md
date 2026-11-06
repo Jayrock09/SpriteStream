@@ -1,6 +1,6 @@
 # SpriteStream
 
-Fabric mod for Minecraft 26.3. Requires **Sodium 0.9.2+** (0.9.x). Optional: **Iris 1.12+** for shader packs,
+Fabric mod for Minecraft 26.3. Requires **Sodium 0.9.2+** (0.9.x). Optional: **Iris 1.11+** for shader packs,
 **Continuity** for connected textures.
 
 Lets huge block texture packs (512x–2048x, including LabPBR packs with POM) run inside a fixed VRAM budget.
@@ -64,16 +64,24 @@ Alpha Piscium.
 
 ## Iris version
 
-The shader-pack hooks use the sampler and shader-transform API of **Iris 1.12**, which is not on Modrinth yet
-(the latest public 26.3 release is 1.11.x). SpriteStream only loads those hooks on Iris 1.12+, and only after
-checking that the installed Iris still has every method they hook. Otherwise it **turns itself off** and logs
-one line saying why (`[SpriteStream] Streaming is off: ...`): textures then load exactly as without the mod.
-It does not run "half on" with an older Iris, because Iris does not reload resource packs when you toggle
-shaders, so a shader pack turned on later would be stuck with the 64x base textures.
+| Iris | Backend | What SpriteStream does |
+|---|---|---|
+| none | any | Streams through Sodium's terrain shader |
+| 1.12+ | Vulkan or OpenGL | Streams with and without shader packs (samplers bound as texture views) |
+| 1.11.x | OpenGL | Streams with and without shader packs (samplers bound as OpenGL texture names) |
+| 1.11.x | Vulkan | Iris 1.11 runs no shader packs on Vulkan (it only offers to switch to OpenGL), so SpriteStream streams as if Iris were not installed |
+| older than 1.11, or one whose code changed | any | Turns itself off and logs one line saying why; textures load as without the mod |
+
+Before the Iris hooks are applied, SpriteStream reads the installed Iris's class files and checks that every
+method it hooks or calls is there, then picks the 1.12 or 1.11 hook set. If neither fits (for example a future
+Iris that changed those internals), it turns itself off instead of crashing the game. It never runs "half on",
+because Iris does not reload resource packs when you toggle shaders, so a shader pack turned on later would be
+stuck with the 64x base textures.
 
 ## Build / test
 
-Needs JDK 25. Sodium is fetched from Modrinth. To include the Iris hooks, point `irisJar` at an Iris 1.12 jar
+Needs JDK 25. Sodium and Iris 1.11.7 are fetched from Modrinth (1.11.7 is only used to compile-check the 1.11
+hooks and in tests). To include the Iris hooks, point `irisJar` at an Iris 1.12 jar
 in a `local.properties` file (not committed), or pass `-PirisJar=<path>`:
 
 ```

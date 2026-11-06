@@ -11,7 +11,7 @@ First release.
 - Background decoding with a per-frame upload budget and fade-in.
 - Sharp magnification: close-up texels stay crisp with anti-aliased edges instead of a bilinear blur.
 
-### Shader packs (Iris 1.12+)
+### Shader packs (Iris 1.11+)
 - Normal and specular (LabPBR) maps stream alongside colour while a shader pack is active.
 - Terrain shaders are patched so `texture`/`textureLod`/`textureGrad` reads (including ones inside helper
   functions, as in Bliss) go through the pool; POM keeps working.
@@ -21,7 +21,11 @@ First release.
 ### Compatibility
 - Connected/random textures (Continuity, OptiFine CTM format, including Continuity's renamed tiles) stream.
 - Entity textures in the block atlas, animated textures and the non-block atlases are capped instead of streamed.
-- Safe fallback: with an unsupported Iris (older than 1.12, or one whose internals changed) SpriteStream turns
+- Iris 1.11.x (current public release) and 1.12+ are both supported. The hook set is picked at startup from
+  what the installed Iris actually has: 1.12 binds the pool as texture views (Vulkan and OpenGL), 1.11 as
+  OpenGL texture names (Iris 1.11 runs shader packs on OpenGL only; on Vulkan SpriteStream streams without
+  shaders).
+- Safe fallback: with an unsupported Iris (older than 1.11, or one whose internals changed) SpriteStream turns
   itself off with one clear log line instead of crashing.
 
 ### Loading

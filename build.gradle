@@ -63,6 +63,11 @@ loom {
 	}
 }
 
+configurations {
+	// Iris 1.11.7, compile-check only (never on the runtime classpath or in the jar)
+	iris111
+}
+
 dependencies {
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
@@ -71,6 +76,7 @@ dependencies {
 	// Sodium owns terrain rendering; we patch its shaders and bind our resources.
 	compileOnly("maven.modrinth:sodium:${project.sodium_version}") { transitive = false }
 	runtimeOnly("maven.modrinth:sodium:${project.sodium_version}") { transitive = false }
+	iris111("maven.modrinth:iris:${project.iris111_version}") { transitive = false }
 	// ShaderPatchTest patches Sodium's real terrain shader.
 	testRuntimeOnly("maven.modrinth:sodium:${project.sodium_version}") { transitive = false }
 
@@ -98,6 +104,12 @@ dependencies {
 
 test {
 	useJUnitPlatform()
+	// IrisHookCheckTest/IrisCompatTest read both Iris jars directly to check each hook set.
+	systemProperty "spritestream.iris111Jar", configurations.iris111.singleFile.absolutePath
+	systemProperty "spritestream.testTmp", layout.buildDirectory.dir("tmp/iris-nested").get().asFile.absolutePath
+	if (irisJar != null) {
+		systemProperty "spritestream.iris112Jar", file(irisJar).absolutePath
+	}
 	testLogging {
 		events "failed"
 		exceptionFormat "full"
@@ -129,3 +141,15 @@ jar {
 		rename { "${it}_${project.archives_base_name}" }
 	}
 }
+
+// Compiles the Iris hooks (except the 1.12-only sampler hook) and everything they use against Iris 1.11.7, so
+// a 1.11 API mismatch fails the build instead of the game. Runs with `gradlew check` / `build`.
+def compileAgainstIris111 = tasks.register("compileAgainstIris111", JavaCompile) {
+	source = sourceSets.main.java
+	exclude "dev/spritestream/mixin/iris/IrisSamplersMixin.java"
+	classpath = sourceSets.main.compileClasspath.filter { irisJar == null || it != file(irisJar) } + configurations.iris111
+	destinationDirectory = layout.buildDirectory.dir("iris111-check")
+	options.release = 25
+	options.encoding = "UTF-8"
+}
+tasks.named("check") { dependsOn compileAgainstIris111 }

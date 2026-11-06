@@ -14,8 +14,9 @@ import org.objectweb.asm.tree.MethodNode;
 
 /**
  * Checks, before the Iris hooks are applied, that the installed Iris still has every method and field they hook
- * or call. A mismatch would otherwise crash the game while mixins apply; with this check the hooks are left
- * out and SpriteStream turns itself off instead.
+ * or call, and picks the hook set that fits it (Iris 1.12 texture views, or Iris 1.11 OpenGL texture names). A
+ * mismatch would otherwise crash the game while mixins apply; with this check the hooks are left out and
+ * SpriteStream turns itself off instead.
  */
 public final class IrisHookCheck {
 	private static final String LOADER = "net/irisshaders/iris/pbr/loader/AtlasPBRLoader";
@@ -26,18 +27,12 @@ public final class IrisHookCheck {
 	private record Need(String owner, String name, String descriptor, @Nullable String calls) {
 	}
 
-	private static final List<Need> NEEDS = List.of(
+	/** Hooked or called by the shader-transform, PBR-loader and sampler hooks of every set. */
+	private static final List<Need> COMMON = List.of(
 		new Need(
 			"net/irisshaders/iris/samplers/IrisSamplers",
 			"addLevelSamplers",
 			"(L" + SAMPLER_HOLDER + ";Lnet/irisshaders/iris/pipeline/WorldRenderingPipeline;Lnet/minecraft/client/renderer/texture/AbstractTexture;ZZZ)V",
-			null
-		),
-		new Need(SAMPLER_HOLDER, "addTextureSampler", "(L" + SAMPLER_HOLDER + "$TextureBinding;Z[Ljava/lang/String;)Z", null),
-		new Need(
-			SAMPLER_HOLDER + "$TextureBinding",
-			"<init>",
-			"(Ljava/lang/Object;Ljava/util/function/Supplier;Ljava/util/function/Supplier;Ljava/util/function/Supplier;)V",
 			null
 		),
 		new Need(GL_SAMPLER, "NEAREST", "L" + GL_SAMPLER + ";", null),
@@ -74,19 +69,88 @@ public final class IrisHookCheck {
 		new Need("net/irisshaders/iris/pbr/texture/PBRType", "values", "()[Lnet/irisshaders/iris/pbr/texture/PBRType;", null)
 	);
 
+	/** Iris 1.12+: samplers bound as render-API texture views, on both OpenGL and Vulkan. */
+	private static final List<Need> TEXTURE_BINDING = List.of(
+		new Need(SAMPLER_HOLDER, "addTextureSampler", "(L" + SAMPLER_HOLDER + "$TextureBinding;Z[Ljava/lang/String;)Z", null),
+		new Need(
+			SAMPLER_HOLDER + "$TextureBinding",
+			"<init>",
+			"(Ljava/lang/Object;Ljava/util/function/Supplier;Ljava/util/function/Supplier;Ljava/util/function/Supplier;)V",
+			null
+		)
+	);
+
+	/** Iris 1.11: samplers bound as OpenGL texture names (1.11 runs shader packs on OpenGL only). */
+	private static final List<Need> GL_TEXTURE_IDS = List.of(
+		new Need(SAMPLER_HOLDER, "addDynamicSampler", "(Ljava/util/function/IntSupplier;L" + GL_SAMPLER + ";[Ljava/lang/String;)Z", null)
+	);
+
+	/** Which Iris hooks to apply. */
+	public enum HookSet {
+		/** Iris 1.12 style: texture views, works on every backend. */
+		TEXTURE_BINDING("iris.IrisSamplersMixin"),
+		/** Iris 1.11 style: OpenGL texture names. */
+		GL_TEXTURE_IDS("iris.IrisSamplersGlMixin"),
+		/** The installed Iris lacks something every set needs. */
+		NONE(null);
+
+		private final @Nullable String samplerMixin;
+
+		HookSet(final @Nullable String samplerMixin) {
+			this.samplerMixin = samplerMixin;
+		}
+
+		/** Mixin classes (relative to the mixin package) to apply for this set. */
+		public List<String> mixins() {
+			return this.samplerMixin == null
+				? List.of()
+				: List.of(this.samplerMixin, "iris.TransformPatcherMixin", "iris.AtlasPBRLoaderMixin");
+		}
+	}
+
+	/** The chosen set, and what was missing for the sets that could not be used (empty when one fits). */
+	public record Result(HookSet set, List<String> missing) {
+	}
+
+	/** Picks the newest hook set the installed Iris fully supports. */
+	public static Result choose(final Function<String, byte @Nullable []> classBytes) {
+		java.util.Map<String, @Nullable ClassNode> cache = new java.util.HashMap<>();
+		Function<String, @Nullable ClassNode> classes = name -> cache.computeIfAbsent(name, n -> read(classBytes.apply(n)));
+		List<String> common = missing(COMMON, classes);
+		if (!common.isEmpty()) {
+			return new Result(HookSet.NONE, common);
+		}
+		List<String> modern = missing(TEXTURE_BINDING, classes);
+		if (modern.isEmpty()) {
+			return new Result(HookSet.TEXTURE_BINDING, List.of());
+		}
+		List<String> gl = missing(GL_TEXTURE_IDS, classes);
+		if (gl.isEmpty()) {
+			return new Result(HookSet.GL_TEXTURE_IDS, List.of());
+		}
+		List<String> both = new ArrayList<>(modern);
+		both.addAll(gl);
+		return new Result(HookSet.NONE, both);
+	}
+
+	/** Uses class files visible to the given loader, which at mixin time can see every mod's classes. */
+	public static Result choose(final ClassLoader loader) {
+		return choose(name -> {
+			try (var in = loader.getResourceAsStream(name + ".class")) {
+				return in == null ? null : in.readAllBytes();
+			} catch (java.io.IOException e) {
+				return null;
+			}
+		});
+	}
+
 	private IrisHookCheck() {
 	}
 
-	/**
-	 * Returns what the hooks need but the installed Iris lacks; empty when everything is there.
-	 *
-	 * @param classBytes looks up a class file by internal name, or returns null when the class does not exist
-	 */
-	public static List<String> missing(final Function<String, byte @Nullable []> classBytes) {
+	private static List<String> missing(final List<Need> needs, final Function<String, @Nullable ClassNode> classes) {
 		List<String> missing = new ArrayList<>();
-		java.util.Map<String, @Nullable ClassNode> classes = new java.util.HashMap<>();
-		for (Need need : NEEDS) {
-			ClassNode node = classes.computeIfAbsent(need.owner(), owner -> read(classBytes.apply(owner)));
+		for (Need need : needs) {
+			ClassNode node = classes.apply(need.owner());
 			String label = need.owner().substring(need.owner().lastIndexOf('/') + 1) + "." + need.name();
 			if (node == null) {
 				missing.add(label + " (class not found)");
@@ -102,17 +166,6 @@ public final class IrisHookCheck {
 			}
 		}
 		return missing;
-	}
-
-	/** Uses class files visible to the given loader, which at mixin time can see every mod's classes. */
-	public static List<String> missing(final ClassLoader loader) {
-		return missing(name -> {
-			try (var in = loader.getResourceAsStream(name + ".class")) {
-				return in == null ? null : in.readAllBytes();
-			} catch (java.io.IOException e) {
-				return null;
-			}
-		});
 	}
 
 	private static @Nullable ClassNode read(final byte @Nullable [] bytes) {

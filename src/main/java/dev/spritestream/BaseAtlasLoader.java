@@ -32,7 +32,7 @@ public final class BaseAtlasLoader {
 
 	private static volatile Map<Identifier, Source> sources = new ConcurrentHashMap<>();
 	private static volatile boolean activeForCurrentLoad;
-	/** Whether to shrink Iris's PBR maps during this load (Iris with our hooks is installed). */
+	/** Whether to shrink Iris's PBR maps during this load (Iris with our hooks, able to run shader packs here). */
 	private static volatile boolean preparePbrForCurrentLoad;
 
 	private BaseAtlasLoader() {
@@ -45,7 +45,7 @@ public final class BaseAtlasLoader {
 		activeForCurrentLoad = SpriteStreamMod.shouldStream();
 		preparePbrForCurrentLoad = activeForCurrentLoad
 			&& SpriteStreamMod.config.preparePbrMapsAtLoad
-			&& IrisCompat.hooksUsable();
+			&& IrisCompat.shaderPacksPossible();
 		if (!activeForCurrentLoad) {
 			SpriteStreamMod.LOGGER.info("[SpriteStream] Streaming disabled for this reload; textures load unchanged");
 		}

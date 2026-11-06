@@ -39,14 +39,16 @@ class ModMetadataTest {
 		assertTrue(accepts(depends, "fabricloader", "0.19.5"));
 		JsonObject suggests = metadata().getAsJsonObject("suggests");
 		assertTrue(accepts(suggests, "iris", "1.12.0-snapshot+mc26.3-local"));
-		assertFalse(accepts(suggests, "iris", "1.11.7+mc26.3"));
+		assertTrue(accepts(suggests, "iris", "1.11.7+mc26.3"));
+		assertFalse(accepts(suggests, "iris", "1.10.4+mc26.3"));
 	}
 
 	@Test
 	void irisCompatMinimumMatchesTheSuggestion() throws Exception {
-		// IrisCompat compares against 1.12.0-, so a 1.12 snapshot counts as supported and 1.11 does not.
-		assertTrue(Version.parse("1.12.0-snapshot+mc26.3-local").compareTo(SemanticVersion.parse("1.12.0-")) >= 0);
-		assertTrue(Version.parse("1.11.7+mc26.3").compareTo(SemanticVersion.parse("1.12.0-")) < 0);
+		VersionPredicate suggested = VersionPredicate.parse(metadata().getAsJsonObject("suggests").get("iris").getAsString());
+		Version minimum = SemanticVersion.parse(IrisCompat.MIN_VERSION);
+		assertTrue(suggested.test(minimum), "fabric.mod.json and IrisCompat.MIN_VERSION disagree");
+		assertTrue(Version.parse("1.11.0+mc26.3").compareTo(minimum) >= 0);
 	}
 
 	@Test
