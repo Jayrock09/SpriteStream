@@ -59,17 +59,38 @@ public final class ShaderPatch {
 		// Maps an atlas UV into the pool. Returns false when the sprite is not resident, lacks this plane, or
 		// the base atlas already holds as much detail as the footprint needs. explicitLod < 0 means "from the
 		// gradients"; otherwise it is a level in pool texels (0 = sharpest).
+		// Per-fragment memo of the last sprite looked up. POM loops and the colour/normal/specular reads of one
+		// fragment hit the same sprite many times; while the UV stays inside its atlas rectangle, the id map and
+		// table reads are skipped. Same results as looking everything up every time.
+		int ss_mId = 0;
+		vec4 ss_mRect = vec4(0.0);
+		vec4 ss_mSlot = vec4(0.0);
+		vec4 ss_mExt = vec4(0.0);
+		vec4 ss_mInfo = vec4(0.0);
+
+		int ss_lookup(vec2 uv) {
+		    if (ss_mId != 0 && all(greaterThanEqual(uv, ss_mRect.xy)) && all(lessThan(uv, ss_mRect.zw))) return ss_mId;
+		    int id = ss_spriteId(uv);
+		    if (id != 0 && id != ss_mId) {
+		        ss_mId = id;
+		        ss_mRect = ss_entry(id, 0);
+		        ss_mSlot = ss_entry(id, 1);
+		        ss_mExt = ss_entry(id, 2);
+		        ss_mInfo = ss_entry(id, 3);
+		    }
+		    return id;
+		}
+
 		bool ss_resolve(int plane, vec2 uv, vec2 dx, vec2 dy, float explicitLod,
 		                out vec2 puv, out vec2 pdx, out vec2 pdy, out float lod, out float fade) {
 		    puv = vec2(0.0); pdx = vec2(0.0); pdy = vec2(0.0); lod = 0.0; fade = 0.0;
-		    int id = ss_spriteId(uv);
-		    if (id == 0) return false;
-		    vec4 slot = ss_entry(id, 1);
+		    if (ss_lookup(uv) == 0) return false;
+		    vec4 slot = ss_mSlot;
 		    if (slot.x < 0.5) return false;
-		    vec4 info = ss_entry(id, 3);
+		    vec4 info = ss_mInfo;
 		    if ((plane == 1 && info.y < 0.5) || (plane == 2 && info.z < 0.5)) return false;
-		    vec4 rect = ss_entry(id, 0);
-		    vec4 ext = ss_entry(id, 2);
+		    vec4 rect = ss_mRect;
+		    vec4 ext = ss_mExt;
 		    vec2 scale = ext.xy / (rect.zw - rect.xy);
 		    pdx = dx * scale;
 		    pdy = dy * scale;
