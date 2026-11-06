@@ -197,7 +197,7 @@ public final class CtmVariants {
 	 * {@code bricks}, {@code block/bricks}, {@code minecraft:block/bricks} or
 	 * {@code textures/block/extra/anvil_side.png} as an atlas sprite id.
 	 */
-	private static Identifier textureId(final String namespace, final String name) {
+	static Identifier textureId(final String namespace, final String name) {
 		String path = name.endsWith(".png") ? name.substring(0, name.length() - 4) : name;
 		String ns = namespace;
 		int colon = path.indexOf(':');

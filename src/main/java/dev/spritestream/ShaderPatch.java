@@ -47,14 +47,13 @@ public final class ShaderPatch {
 		    return texelFetch(ss_Table, ivec2((id & 255) * 4 + k, id >> 8), 0);
 		}
 
-		// Sodium's anti-aliased nearest: when a texel covers several pixels, move the sample toward the texel
-		// centre so it stays crisp like the original, with a one-pixel smooth edge instead of a bilinear blur.
+		// Anti-aliased "pixel art" sampling with a linear sampler: while a texel spans several pixels, sample at
+		// its centre (crisp, like nearest) and blend linearly only within half a pixel of each texel edge.
 		vec2 ss_sharpen(vec2 puv, vec2 pdx, vec2 pdy, vec2 texel) {
-		    vec2 screen = max(sqrt(pdx * pdx + pdy * pdy), vec2(1e-9));
-		    vec2 t = puv / texel;
-		    vec2 center = round(t) - 0.5;
-		    vec2 offset = clamp((t - center - 0.5) * texel / screen + 0.5, 0.0, 1.0);
-		    return (center + offset) * texel;
+		    vec2 p = puv / texel;
+		    vec2 pixel = max(vec2(length(vec2(pdx.x, pdy.x)), length(vec2(pdx.y, pdy.y))) / texel, vec2(1e-9));
+		    vec2 edge = floor(p + 0.5);
+		    return (edge + clamp((p - edge) / pixel, -0.5, 0.5)) * texel;
 		}
 
 		// Maps an atlas UV into the pool. Returns false when the sprite is not resident, lacks this plane, or

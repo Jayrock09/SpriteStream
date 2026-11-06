@@ -18,6 +18,7 @@ public final class SpriteStreamMod implements ClientModInitializer {
 	private static @Nullable Object irisApi;
 	private static @Nullable Method irisPackInUse;
 	private static boolean irisLookupDone;
+	private static boolean irisWarned;
 
 	@Override
 	public void onInitializeClient() {
@@ -39,11 +40,15 @@ public final class SpriteStreamMod implements ClientModInitializer {
 			return false;
 		}
 		// With an Iris we cannot hook, a shader pack would show only the small base textures, so stay off.
-		if (IrisCompat.isInstalled() && !(IrisCompat.isSupported() && IrisCompat.hooksPresent())) {
-			LOGGER.warn(
-				"[SpriteStream] Iris {} is not supported by this build (needs Iris 1.12+ and a build with the Iris hooks); streaming is off",
-				IrisCompat.installedVersion()
-			);
+		// (Iris does not reload resource packs when shaders are toggled, so streaming "only while shaders are off"
+		// would leave a pack turned on later stuck at the base resolution.)
+		String why = IrisCompat.whyUnusable();
+		if (why != null) {
+			if (!irisWarned) {
+				irisWarned = true;
+				LOGGER.warn("[SpriteStream] Streaming is off: {}. Textures load exactly as without SpriteStream. "
+					+ "Remove Iris or install a supported Iris version to use it.", why);
+			}
 			return false;
 		}
 		return true;

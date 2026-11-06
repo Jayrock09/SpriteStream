@@ -467,15 +467,10 @@ public final class StreamManager {
 	}
 
 	private int targetResolution(final StreamedSprite s) {
-		float want = s.wanted();
-		int base = SpriteStreamMod.config.baseResolution;
-		if (want <= base || this.page == null) {
+		if (this.page == null) {
 			return 0;
 		}
-		int needed = (int) Math.ceil(want);
-		int resolution = Integer.highestOneBit(needed - 1) << 1; // next power of two >= needed
-		resolution = Math.max(PoolPage.CELL, resolution);
-		return Math.min(resolution, Math.min(s.maxResolution, this.page.maxResolution));
+		return ResolutionMath.target(s.wanted(), SpriteStreamMod.config.baseResolution, s.maxResolution, this.page.maxResolution);
 	}
 
 	private void assign() {
@@ -496,18 +491,13 @@ public final class StreamManager {
 			return byHits != 0 ? byHits : Integer.compare(target[b.id], target[a.id]);
 		});
 
-		long capacity = (long) (page.totalCells() * FILL_TARGET);
-		long used = 0;
-		for (StreamedSprite s : candidates) {
-			int resolution = target[s.id];
-			while (resolution >= PoolPage.CELL && used + PoolPage.cellsFor(resolution) > capacity) {
-				resolution >>= 1;
-			}
-			if (resolution < PoolPage.CELL) {
-				continue;
-			}
-			s.effectiveResolution = resolution;
-			used += PoolPage.cellsFor(resolution);
+		int[] ordered = new int[candidates.size()];
+		for (int i = 0; i < ordered.length; i++) {
+			ordered[i] = target[candidates.get(i).id];
+		}
+		int[] fitted = ResolutionMath.fit(ordered, (long) (page.totalCells() * FILL_TARGET));
+		for (int i = 0; i < fitted.length; i++) {
+			candidates.get(i).effectiveResolution = fitted[i];
 		}
 
 		int maxInFlight = SpriteStreamMod.config.decodeThreads * 2;
@@ -825,19 +815,20 @@ public final class StreamManager {
 			this.heights = hs;
 
 			ByteBuffer[][] out = new ByteBuffer[this.page.planeCount][];
-			out[PoolPage.PLANE_COLOR] = this.decodePlane(this.sprite.resource, true);
+			out[PoolPage.PLANE_COLOR] = this.decodePlane(this.sprite.resource, PoolPage.PLANE_COLOR);
 			if (this.page.planeCount > 1) {
-				out[PoolPage.PLANE_NORMAL] = this.sprite.normalResource == null ? null : this.decodePlane(this.sprite.normalResource, false);
-				out[PoolPage.PLANE_SPECULAR] = this.sprite.specularResource == null ? null : this.decodePlane(this.sprite.specularResource, false);
+				out[PoolPage.PLANE_NORMAL] = this.sprite.normalResource == null ? null : this.decodePlane(this.sprite.normalResource, PoolPage.PLANE_NORMAL);
+				out[PoolPage.PLANE_SPECULAR] = this.sprite.specularResource == null ? null : this.decodePlane(this.sprite.specularResource, PoolPage.PLANE_SPECULAR);
 			}
 			this.planes = out;
 		}
 
 		/**
-		 * Colour is averaged alpha-weighted (alpha is coverage). Normal and specular maps keep data in alpha
-		 * (height, emission), so their channels are averaged independently.
+		 * Colour is averaged alpha-weighted (alpha is coverage). Normal maps keep height in alpha, so their
+		 * channels are averaged independently; specular maps follow the LabPBR rules in
+		 * {@link ImageOps#downsampleSpecular}.
 		 */
-		private ByteBuffer[] decodePlane(final Resource resource, final boolean alphaIsCoverage) throws Exception {
+		private ByteBuffer[] decodePlane(final Resource resource, final int plane) throws Exception {
 			NativeImage image;
 			try (InputStream in = resource.open()) {
 				image = NativeImage.read(in);
@@ -853,8 +844,10 @@ public final class StreamManager {
 					int sh = level == 0 ? image.getHeight() : this.heights[level - 1];
 					if (sw == lw && sh == lh) {
 						MemoryUtil.memCopy(src, MemoryUtil.memAddress(levels[level]), (long) lw * lh * 4L);
-					} else if (alphaIsCoverage) {
+					} else if (plane == PoolPage.PLANE_COLOR) {
 						ImageOps.downsample(src, sw, sh, MemoryUtil.memAddress(levels[level]), lw, lh);
+					} else if (plane == PoolPage.PLANE_SPECULAR) {
+						ImageOps.downsampleSpecular(src, sw, sh, MemoryUtil.memAddress(levels[level]), lw, lh);
 					} else {
 						ImageOps.downsamplePlain(src, sw, sh, MemoryUtil.memAddress(levels[level]), lw, lh);
 					}

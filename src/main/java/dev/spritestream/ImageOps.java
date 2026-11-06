@@ -75,6 +75,68 @@ public final class ImageOps {
 	}
 
 	/** Returns a new image scaled so that its larger side is at most {@code maxSide}; the source is not closed. */
+	/**
+	 * Box filter for LabPBR specular maps, whose channels are not all plain quantities:
+	 * <ul>
+	 * <li>G below 230 is linear F0, 230-255 are IDs of predefined metals. A block that is mostly metal keeps its
+	 * most common metal ID; otherwise only the non-metal texels are averaged, so the result is never a made-up
+	 * value between an F0 and an ID.</li>
+	 * <li>A is emission, where 255 means "none" (so the map looks opaque in image editors). It is averaged as 0,
+	 * and a result of 0 is written back as 255.</li>
+	 * <li>R (smoothness) and B (porosity / subsurface) are averaged.</li>
+	 * </ul>
+	 */
+	public static void downsampleSpecular(final long src, final int sw, final int sh, final long dst, final int dw, final int dh) {
+		int[] metalCounts = new int[26];
+		for (int y = 0; y < dh; y++) {
+			int y0 = (int) ((long) y * sh / dh);
+			int y1 = Math.max(y0 + 1, (int) ((long) (y + 1) * sh / dh));
+			for (int x = 0; x < dw; x++) {
+				int x0 = (int) ((long) x * sw / dw);
+				int x1 = Math.max(x0 + 1, (int) ((long) (x + 1) * sw / dw));
+				long r = 0, b = 0, emission = 0, f0 = 0;
+				int n = 0, dielectrics = 0, metals = 0;
+				java.util.Arrays.fill(metalCounts, 0);
+				for (int sy = y0; sy < y1; sy++) {
+					long row = src + ((long) sy * sw + x0) * 4L;
+					for (int sx = x0; sx < x1; sx++, row += 4) {
+						r += MemoryUtil.memGetByte(row) & 0xFF;
+						int g = MemoryUtil.memGetByte(row + 1) & 0xFF;
+						b += MemoryUtil.memGetByte(row + 2) & 0xFF;
+						int a = MemoryUtil.memGetByte(row + 3) & 0xFF;
+						emission += a == 255 ? 0 : a;
+						if (g >= 230) {
+							metalCounts[g - 230]++;
+							metals++;
+						} else {
+							f0 += g;
+							dielectrics++;
+						}
+						n++;
+					}
+				}
+				int g;
+				if (metals > dielectrics) {
+					int best = 0;
+					for (int i = 1; i < metalCounts.length; i++) {
+						if (metalCounts[i] > metalCounts[best]) {
+							best = i;
+						}
+					}
+					g = 230 + best;
+				} else {
+					g = (int) (f0 / dielectrics);
+				}
+				int a = (int) (emission / n);
+				long out = dst + ((long) y * dw + x) * 4L;
+				MemoryUtil.memPutByte(out, (byte) (r / n));
+				MemoryUtil.memPutByte(out + 1, (byte) g);
+				MemoryUtil.memPutByte(out + 2, (byte) (b / n));
+				MemoryUtil.memPutByte(out + 3, (byte) (a == 0 ? 255 : a));
+			}
+		}
+	}
+
 	public static NativeImage shrinkTo(final NativeImage source, final int maxSide) {
 		int w = source.getWidth();
 		int h = source.getHeight();

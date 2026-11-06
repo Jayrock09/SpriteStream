@@ -3,7 +3,6 @@ package dev.spritestream;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import java.io.IOException;
-import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -45,31 +44,50 @@ public final class SpriteStreamConfig {
 	 * shader pack on does not stall the game while Iris builds its PBR atlases.
 	 */
 	public boolean preparePbrMapsAtLoad = true;
+	/**
+	 * Vanilla stitches a PBR pack's {@code _n}/{@code _s} maps into the block atlas although nothing draws them
+	 * there. Put a small placeholder in their slot instead of decoding the full-size map (faster loading, less RAM).
+	 */
+	public boolean skipPbrMapsInBlockAtlas = true;
 	/** Write a status line to the log every few seconds. */
 	public boolean logStats = true;
 
 	public static SpriteStreamConfig load() {
 		Path path = FabricLoader.getInstance().getConfigDir().resolve("spritestream.json");
-		SpriteStreamConfig config = new SpriteStreamConfig();
-		config.configVersion = CURRENT_VERSION;
+		SpriteStreamConfig config = defaults();
 		if (Files.exists(path)) {
-			try (Reader reader = Files.newBufferedReader(path)) {
-				SpriteStreamConfig read = GSON.fromJson(reader, SpriteStreamConfig.class);
-				if (read != null) {
-					config = read;
-					config.migrate();
-				}
+			try {
+				config = fromJson(Files.readString(path));
 			} catch (Exception e) {
 				SpriteStreamMod.LOGGER.warn("Could not read {}, using defaults", path, e);
+				config = defaults();
 			}
 		}
-		config.sanitize();
 		try (Writer writer = Files.newBufferedWriter(path)) {
 			GSON.toJson(config, writer);
 		} catch (IOException e) {
 			SpriteStreamMod.LOGGER.warn("Could not write {}", path, e);
 		}
 		return config;
+	}
+
+	/** A fresh config with every default, already sanitized. */
+	public static SpriteStreamConfig defaults() {
+		SpriteStreamConfig config = new SpriteStreamConfig();
+		config.configVersion = CURRENT_VERSION;
+		config.sanitize();
+		return config;
+	}
+
+	/** Parses a saved config, upgrading old defaults and clamping every value to its valid range. */
+	public static SpriteStreamConfig fromJson(final String json) {
+		SpriteStreamConfig read = GSON.fromJson(json, SpriteStreamConfig.class);
+		if (read == null) {
+			return defaults();
+		}
+		read.migrate();
+		read.sanitize();
+		return read;
 	}
 
 	/** Moves values still at an old default to the current default. */

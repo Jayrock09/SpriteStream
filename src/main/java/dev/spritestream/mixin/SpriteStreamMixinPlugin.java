@@ -8,8 +8,9 @@ import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
 /**
- * Adds the Iris hooks only when Iris 1.12+ is installed and this jar was built with them. They are not
- * listed in the mixin config, so an older Iris (or no Iris) never sees them.
+ * Adds the Iris hooks only when Iris 1.12+ is installed, this jar was built with them, and the installed Iris still
+ * has everything they hook ({@link dev.spritestream.IrisHookCheck}). They are not listed in the mixin config, so any
+ * other Iris (or no Iris) never sees them, and a changed Iris turns SpriteStream off instead of crashing the game.
  */
 public final class SpriteStreamMixinPlugin implements IMixinConfigPlugin {
 	@Override
@@ -32,7 +33,7 @@ public final class SpriteStreamMixinPlugin implements IMixinConfigPlugin {
 
 	@Override
 	public List<String> getMixins() {
-		if (IrisCompat.isSupported() && IrisCompat.hooksPresent()) {
+		if (IrisCompat.hooksUsable()) {
 			return List.of("iris.IrisSamplersMixin", "iris.TransformPatcherMixin", "iris.AtlasPBRLoaderMixin");
 		}
 		return null;

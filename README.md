@@ -1,4 +1,7 @@
-# SpriteStream (Fabric 26.3, requires Sodium; Iris 1.12+ optional)
+# SpriteStream
+
+Fabric mod for Minecraft 26.3. Requires **Sodium 0.9.2+** (0.9.x). Optional: **Iris 1.12+** for shader packs,
+**Continuity** for connected textures.
 
 Lets huge block texture packs (512x–2048x, including LabPBR packs with POM) run inside a fixed VRAM budget.
 
@@ -38,6 +41,9 @@ Alpha Piscium.
 | `evictDelaySeconds` | 3.0 | How long a texture keeps its resolution after it stops being needed |
 | `fadeSeconds` | 0.25 | Fade-in time for upgrades |
 | `preparePbrMapsAtLoad` | true | With Iris, shrink `_n`/`_s` maps while the pack loads so turning shaders on does not stall the game |
+| `skipPbrMapsInBlockAtlas` | true | Don't decode `_n`/`_s` maps just for vanilla's block atlas (nothing draws them there); faster loading |
+| `decodeThreads` | 3 | Background threads decoding upgrades |
+| `logStats` | true | Write a pool status line to the log every few seconds |
 
 ## Known limits
 
@@ -45,20 +51,25 @@ Alpha Piscium.
 - Shader packs: `texelFetch` on the atlases and sampling in vertex/geometry shaders still read the base atlas;
   the shadow pass is not patched (it only needs cut-out alpha). An explicit `textureLod(..., 0)` is treated as
   "sharpest pool level".
-- LabPBR specular mips are plain averages, so emission edges in distant mips can be slightly off.
 - Turning a shader pack on or off rebuilds the pool once (it adds or drops the normal/specular planes).
 - Connected/random textures (Continuity, OptiFine CTM format) are linked to their blocks by reading the pack's
   `optifine/ctm/**.properties` (`matchTiles`, `matchBlocks`, `tiles`); formats other than OptiFine CTM are not.
 - Block items in hand and GUI, and entity textures, are not streamed.
 - The whole pack is still decoded once at load to build the base atlas (with Iris, the `_n`/`_s` maps too, so
-  that Iris's PBR atlas build is instant later). Stratum 2048x takes about 45 s on the loading screen.
+  that Iris's PBR atlas build is instant later). Stratum 2048x took about 45 s on the loading screen before
+  `skipPbrMapsInBlockAtlas`; expect less now.
+- Animated textures (water, lava, fire, ...) are not streamed; they are capped at `animatedResolution`.
+- The pool is allocated up front at `vramBudgetMiB`, whether or not it fills up. On cards with 8 GB or less,
+  lower it (e.g. 1024–1536).
 
 ## Iris version
 
 The shader-pack hooks use the sampler and shader-transform API of **Iris 1.12**, which is not on Modrinth yet
-(the latest public 26.3 release is 1.11.7). The mod only loads those hooks on Iris 1.12+. With an older Iris
-installed it turns itself off and logs a warning, because a shader pack would otherwise show only the small
-base textures.
+(the latest public 26.3 release is 1.11.x). SpriteStream only loads those hooks on Iris 1.12+, and only after
+checking that the installed Iris still has every method they hook. Otherwise it **turns itself off** and logs
+one line saying why (`[SpriteStream] Streaming is off: ...`): textures then load exactly as without the mod.
+It does not run "half on" with an older Iris, because Iris does not reload resource packs when you toggle
+shaders, so a shader pack turned on later would be stuck with the 64x base textures.
 
 ## Build / test
 

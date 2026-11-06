@@ -27,6 +27,7 @@ sourceSets {
 }
 
 repositories {
+	mavenCentral()
 	exclusiveContent {
 		forRepository {
 			maven {
@@ -70,11 +71,15 @@ dependencies {
 	// Sodium owns terrain rendering; we patch its shaders and bind our resources.
 	compileOnly("maven.modrinth:sodium:${project.sodium_version}") { transitive = false }
 	runtimeOnly("maven.modrinth:sodium:${project.sodium_version}") { transitive = false }
+	// ShaderPatchTest patches Sodium's real terrain shader.
+	testRuntimeOnly("maven.modrinth:sodium:${project.sodium_version}") { transitive = false }
 
 	// Iris shader-pack support targets Iris 1.12, which is not on Modrinth yet. Point irisJar (in
 	// local.properties or -PirisJar=...) at a 1.12 jar to build it; without one the Iris hooks are left out.
 	if (irisJar != null) {
 		compileOnly files(irisJar)
+		// IrisHookCheckTest checks the hooks against this jar's class files.
+		testRuntimeOnly files(irisJar)
 		// gradlew runClient -Piris adds Iris so shader-pack (PBR/POM) streaming can be tested
 		if (project.hasProperty("iris")) {
 			runtimeOnly files(irisJar)
@@ -84,6 +89,19 @@ dependencies {
 	runtimeOnly("maven.modrinth:continuity:${project.continuity_version}") { transitive = false }
 	// Test client only: skips the "experimental settings" warning so quick-play never stalls on it.
 	runtimeOnly("maven.modrinth:yeetus-experimentus:aSzA9PLW") { transitive = false }
+
+	// Unit tests for the pure logic (CTM parsing, pool math, config, shader text patching).
+	testImplementation platform("org.junit:junit-bom:${project.junit_version}")
+	testImplementation "org.junit.jupiter:junit-jupiter"
+	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+test {
+	useJUnitPlatform()
+	testLogging {
+		events "failed"
+		exceptionFormat "full"
+	}
 }
 
 processResources {
@@ -103,4 +121,11 @@ tasks.withType(JavaCompile).configureEach {
 java {
 	sourceCompatibility = JavaVersion.VERSION_25
 	targetCompatibility = JavaVersion.VERSION_25
+}
+
+jar {
+	// LGPL: ship the license texts with the binary.
+	from(files("COPYING", "COPYING.LESSER")) {
+		rename { "${it}_${project.archives_base_name}" }
+	}
 }

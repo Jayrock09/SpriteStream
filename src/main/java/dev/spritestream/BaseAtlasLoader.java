@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.renderer.texture.atlas.SpriteResourceLoader;
 import net.minecraft.client.resources.metadata.animation.AnimationMetadataSection;
@@ -44,10 +45,9 @@ public final class BaseAtlasLoader {
 		activeForCurrentLoad = SpriteStreamMod.shouldStream();
 		preparePbrForCurrentLoad = activeForCurrentLoad
 			&& SpriteStreamMod.config.preparePbrMapsAtLoad
-			&& IrisCompat.isSupported()
-			&& IrisCompat.hooksPresent();
+			&& IrisCompat.hooksUsable();
 		if (!activeForCurrentLoad) {
-			SpriteStreamMod.LOGGER.info("[SpriteStream] Streaming disabled for this reload (needs Sodium)");
+			SpriteStreamMod.LOGGER.info("[SpriteStream] Streaming disabled for this reload; textures load unchanged");
 		}
 	}
 
@@ -66,6 +66,12 @@ public final class BaseAtlasLoader {
 			if (!activeForCurrentLoad) {
 				return vanilla.loadSprite(spriteLocation, resource);
 			}
+			if (SpriteStreamMod.config.skipPbrMapsInBlockAtlas && isPbrCompanion(spriteLocation.getPath(), colour -> textureExists(spriteLocation.withPath(colour)))) {
+				SpriteContents placeholder = pbrPlaceholder(spriteLocation, resource);
+				if (placeholder != null) {
+					return placeholder;
+				}
+			}
 			if (spriteLocation.getPath().startsWith("entity/")) {
 				// Entity textures some packs put in the block atlas are drawn by entity renderers, not the
 				// patched terrain shader, so they could never stream back up: cap them like the other atlases.
@@ -76,6 +82,43 @@ public final class BaseAtlasLoader {
 			}
 			return load(spriteLocation, resource, additionalMetadataSections, vanilla, SpriteStreamMod.config.baseResolution, true);
 		};
+	}
+
+	/**
+	 * True for a LabPBR normal or specular map ({@code foo_n} / {@code foo_s}) that sits next to its colour
+	 * texture {@code foo}. Vanilla's directory source stitches every PNG under {@code textures/block}, these
+	 * included, although no model uses them; shader packs get them from Iris's own PBR atlases instead.
+	 */
+	static boolean isPbrCompanion(final String spritePath, final Predicate<String> textureExists) {
+		if (!spritePath.endsWith("_n") && !spritePath.endsWith("_s")) {
+			return false;
+		}
+		String colour = spritePath.substring(0, spritePath.length() - 2);
+		return !colour.isEmpty() && !colour.endsWith("/") && textureExists.test(colour);
+	}
+
+	private static boolean textureExists(final Identifier sprite) {
+		return net.minecraft.client.Minecraft.getInstance().getResourceManager()
+			.getResource(sprite.withPath(path -> "textures/" + path + ".png")).isPresent();
+	}
+
+	/**
+	 * A neutral base-size stand-in for a PBR map in the block atlas, so the full-size map is not decoded just to
+	 * be shrunk into a slot nothing draws. Animated maps (and anything unreadable) keep the normal path.
+	 */
+	private static @org.jspecify.annotations.Nullable SpriteContents pbrPlaceholder(final Identifier spriteLocation, final Resource resource) {
+		try {
+			if (resource.metadata().getSection(AnimationMetadataSection.TYPE).isPresent()) {
+				return null;
+			}
+		} catch (Exception e) {
+			return null;
+		}
+		int size = SpriteStreamMod.config.baseResolution;
+		NativeImage image = new NativeImage(size, size, false);
+		// Flat normal / no specular, in case something does draw it.
+		image.fillRect(0, 0, size, size, spriteLocation.getPath().endsWith("_n") ? 0xFF8080FF : 0xFF000000);
+		return new SpriteContents(spriteLocation, new FrameSize(size, size), image, Optional.empty(), List.of(), Optional.empty());
 	}
 
 	/**
