@@ -97,6 +97,8 @@ public final class Benchmark {
 					} else {
 						if ("materials".equals(SCENES)) {
 							materialSpots(minecraft);
+						} else if ("glow".equals(SCENES)) {
+							glowSpots(minecraft);
 						} else if ("extras".equals(SCENES)) {
 							loadSpots(minecraft);
 							Spot c = spots.stream().filter(spot -> spot.name().equals("closeup")).findFirst().orElseThrow();
@@ -301,6 +303,37 @@ public final class Benchmark {
 			Class.forName("net.irisshaders.iris.Iris").getMethod("toggleShaders", Minecraft.class, boolean.class).invoke(null, minecraft, on);
 		} catch (ReflectiveOperationException | LinkageError e) {
 			SpriteStreamMod.LOGGER.warn("[SpriteStream] Bench could not toggle shaders", e);
+		}
+	}
+
+	/**
+	 * LabPBR-emissive blocks (and glowstone, lit by block light, as a control) on a platform in the sky, shot at
+	 * night from 16, 48, 96 and 160 blocks: far away they are drawn from the base atlas and its smallest mips.
+	 */
+	private static void glowSpots(final Minecraft minecraft) {
+		MinecraftServer server = minecraft.getSingleplayerServer();
+		BlockPos base = new BlockPos(minecraft.player.blockPosition().getX(), 200, minecraft.player.blockPosition().getZ());
+		BlockState[] row = {
+			Blocks.REDSTONE_BLOCK.defaultBlockState(), Blocks.SEA_LANTERN.defaultBlockState(), Blocks.DIAMOND_ORE.defaultBlockState(),
+			Blocks.GOLD_ORE.defaultBlockState(), Blocks.EMERALD_ORE.defaultBlockState(), Blocks.REDSTONE_ORE.defaultBlockState(),
+			Blocks.CRYING_OBSIDIAN.defaultBlockState(), Blocks.MAGMA_BLOCK.defaultBlockState(), Blocks.GLOWSTONE.defaultBlockState()
+		};
+		server.execute(() -> {
+			ServerLevel level = server.overworld();
+			for (int x = -1; x <= row.length * 2 - 1; x++) {
+				for (int z = 0; z <= 2; z++) {
+					level.setBlock(base.offset(x, -1, z), Blocks.SMOOTH_STONE.defaultBlockState(), 2);
+				}
+			}
+			for (int i = 0; i < row.length; i++) {
+				level.setBlock(base.offset(i * 2, 0, 1), row[i], 2);
+				level.setBlock(base.offset(i * 2, 1, 1), row[i], 2);
+			}
+		});
+		double cx = base.getX() + row.length - 0.5;
+		for (int distance : new int[] {16, 48, 96, 160}) {
+			// Eye level with the middle of the two-block-high row.
+			spots.add(new Spot("night-" + distance, cx, 199.4, base.getZ() + 1.5 - distance, 0.0F, 0.0F));
 		}
 	}
 

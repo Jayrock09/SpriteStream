@@ -19,7 +19,7 @@ because nothing was edited.
 | `04-connected-textures-bliss.png` | connected bookshelves and sandstone (Continuity), streamed at 512 | `cl-extras2/ctm.png` |
 | `05-spyglass-zoom-bliss.png` | a wall 48 blocks away through the spyglass, streamed sharp | `tb-run1/zoom-on.png` |
 | `06-closeup-no-shaders.png` | the close-up wall without a shader pack | `cl-sharp-new/closeup.png` |
-| `07-emissive-night-bliss.png` | emissive and metal blocks at night | `cl-mat-new/night-near.png` — **hold until you decide on the emission look** |
+| `07-emissive-night-bliss.png` | LabPBR-emissive blocks at night (redstone block, sea lantern, ores, crying obsidian, magma, glowstone): only the glowing parts of each texture glow | `glow-mean/night-16.png` (emission look approved by Jayden, 6 Nov) |
 
 The before/after comparisons in `docs/perf/img/` are labelled side-by-side composites. They are fine to
 link from the description as comparisons, but they are not single unedited captures, so they are not

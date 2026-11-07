@@ -1,6 +1,8 @@
 package dev.spritestream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.ByteBuffer;
 import org.junit.jupiter.api.Test;
@@ -38,10 +40,45 @@ class ImageOpsTest {
 	}
 
 	@Test
-	void emissionIsAveragedAgainstZeroNotAgainst255() {
-		// One fully emissive texel (254) among three "none" (255): a quarter of the glow, not almost full glow.
-		int[] out = reduce(ImageOps::downsampleSpecular, new int[] {0, 0, 0, 254}, new int[] {0, 0, 0, 255}, new int[] {0, 0, 0, 255}, new int[] {0, 0, 0, 255});
-		assertArrayEquals(new int[] {0, 0, 0, 63}, out);
+	void sparseEmissionKeepsItsStrength() {
+		// One fully emissive texel among three "none": the glowing part keeps its strength (a plain average gave 63
+		// and faded at a distance; the old rule counted 255 as emission and lit the whole texel at ~255).
+		int[] out = reduce(ImageOps::downsampleSpecular, new int[] {0, 0, 0, 200}, new int[] {0, 0, 0, 255}, new int[] {0, 0, 0, 255}, new int[] {0, 0, 0, 255});
+		assertArrayEquals(new int[] {0, 0, 0, 200}, out);
+	}
+
+	@Test
+	void noEmissionNeverStartsGlowing() {
+		int[] none = reduce(ImageOps::downsampleSpecular, new int[] {0, 0, 0, 255}, new int[] {0, 0, 0, 0}, new int[] {0, 0, 0, 255}, new int[] {0, 0, 0, 255});
+		assertEquals(255, none[3]);
+		assertEquals(255, ImageOps.emission(0, 0, 16));
+	}
+
+	@Test
+	void evenlyGlowingAreasKeepTheirAverage() {
+		int[] out = reduce(ImageOps::downsampleSpecular, new int[] {0, 0, 0, 80}, new int[] {0, 0, 0, 120}, new int[] {0, 0, 0, 90}, new int[] {0, 0, 0, 110});
+		assertEquals(100, out[3]);
+	}
+
+	@Test
+	void aSmallPatternStillGlowsInASmallTexture() {
+		// An ore-like 16x16 map shrunk to 2x2: two gem texels glow, the stone does not.
+		java.nio.ByteBuffer src = MemoryUtil.memAlloc(16 * 16 * 4);
+		java.nio.ByteBuffer dst = MemoryUtil.memAlloc(2 * 2 * 4);
+		try {
+			for (int i = 0; i < 16 * 16; i++) {
+				src.put(new byte[] {0, 0, 0, (byte) 255});
+			}
+			src.put((3 * 16 + 5) * 4 + 3, (byte) 230);
+			src.put((11 * 16 + 9) * 4 + 3, (byte) 230);
+			src.flip();
+			ImageOps.downsampleSpecular(MemoryUtil.memAddress(src), 16, 16, MemoryUtil.memAddress(dst), 2, 2);
+			int[] alpha = {dst.get(3) & 0xFF, dst.get(7) & 0xFF, dst.get(11) & 0xFF, dst.get(15) & 0xFF};
+			assertArrayEquals(new int[] {230, 255, 255, 230}, alpha);
+		} finally {
+			MemoryUtil.memFree(src);
+			MemoryUtil.memFree(dst);
+		}
 	}
 
 	@Test

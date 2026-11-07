@@ -16,7 +16,8 @@ First release.
 - Terrain shaders are patched so `texture`/`textureLod`/`textureGrad` reads (including ones inside helper
   functions, as in Bliss) go through the pool; POM keeps working.
 - Iris's PBR maps are shrunk during resource loading, so enabling a shader pack does not stall the game.
-- LabPBR-aware mipmaps for specular maps: emission and metal IDs are no longer averaged into wrong values.
+- LabPBR-aware mipmaps for specular maps: emissive textures glow only where the texture says so and keep glowing
+  on the small textures used far away; metal IDs are no longer averaged into wrong values.
 
 ### Compatibility
 - Connected/random textures (Continuity, OptiFine CTM format, including Continuity's renamed tiles) stream.

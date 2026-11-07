@@ -67,6 +67,8 @@ changes how block textures are loaded:
 ### With shader packs (Iris)
 - Normal and specular maps (LabPBR) stream together with the colour texture, and parallax occlusion mapping
   (POM) keeps working — tested with Bliss and Alpha Piscium.
+- Emissive textures glow only where the texture says so, and keep glowing on the small textures used for
+  distant blocks.
 - Iris 1.12+: shader packs on OpenGL and Vulkan. Iris 1.11.x: shader packs on OpenGL (Iris 1.11 itself does
   not run shader packs on Vulkan).
 - With an Iris version SpriteStream does not recognise, it turns itself off and says so in the log; textures

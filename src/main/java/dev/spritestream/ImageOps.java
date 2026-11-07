@@ -84,8 +84,8 @@ public final class ImageOps {
 	 * <li>G below 230 is linear F0, 230-255 are IDs of predefined metals. A block that is mostly metal keeps its
 	 * most common metal ID; otherwise only the non-metal texels are averaged, so the result is never a made-up
 	 * value between an F0 and an ID.</li>
-	 * <li>A is emission, where 255 means "none" (so the map looks opaque in image editors). It is averaged as 0,
-	 * and a result of 0 is written back as 255.</li>
+	 * <li>A is emission (1-254; 255 and 0 mean "none"). See {@link #emission}: sparse emissive patterns keep
+	 * glowing at a distance instead of averaging away, and texels with no emission never start to glow.</li>
 	 * <li>R (smoothness) and B (porosity / subsurface) are averaged.</li>
 	 * </ul>
 	 */
@@ -98,7 +98,7 @@ public final class ImageOps {
 				int x0 = (int) ((long) x * sw / dw);
 				int x1 = Math.max(x0 + 1, (int) ((long) (x + 1) * sw / dw));
 				long r = 0, b = 0, emission = 0, f0 = 0;
-				int n = 0, dielectrics = 0, metals = 0;
+				int n = 0, dielectrics = 0, metals = 0, emissive = 0;
 				java.util.Arrays.fill(metalCounts, 0);
 				for (int sy = y0; sy < y1; sy++) {
 					long row = src + ((long) sy * sw + x0) * 4L;
@@ -107,7 +107,10 @@ public final class ImageOps {
 						int g = MemoryUtil.memGetByte(row + 1) & 0xFF;
 						b += MemoryUtil.memGetByte(row + 2) & 0xFF;
 						int a = MemoryUtil.memGetByte(row + 3) & 0xFF;
-						emission += a == 255 ? 0 : a;
+						if (a != 255 && a != 0) {
+							emission += a;
+							emissive++;
+						}
 						if (g >= 230) {
 							metalCounts[g - 230]++;
 							metals++;
@@ -130,14 +133,28 @@ public final class ImageOps {
 				} else {
 					g = (int) (f0 / dielectrics);
 				}
-				int a = (int) (emission / n);
+				int a = emission(emission, emissive, n);
 				long out = dst + ((long) y * dw + x) * 4L;
 				MemoryUtil.memPutByte(out, (byte) (r / n));
 				MemoryUtil.memPutByte(out + 1, (byte) g);
 				MemoryUtil.memPutByte(out + 2, (byte) (b / n));
-				MemoryUtil.memPutByte(out + 3, (byte) (a == 0 ? 255 : a));
+				MemoryUtil.memPutByte(out + 3, (byte) a);
 			}
 		}
+	}
+
+	/**
+	 * LabPBR emission of a texel made from {@code total} source texels, {@code emissive} of which glow with
+	 * {@code sum} combined strength: the average of the emissive texels only. Averaging the glow with the
+	 * surrounding non-emissive texels (ore stone, the dark parts of a redstone block) dims a small pattern so much
+	 * that it stops glowing at a distance, where the base texture is used; counting "none" (255) as emission made
+	 * the whole block glow. A texel with no emissive source texel stays at "none".
+	 */
+	public static int emission(final long sum, final int emissive, final int total) {
+		if (emissive == 0) {
+			return 255;
+		}
+		return (int) Math.clamp(Math.round((double) sum / emissive), 1, 254);
 	}
 
 	public static NativeImage shrinkTo(final NativeImage source, final int maxSide) {

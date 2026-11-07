@@ -128,3 +128,26 @@ Same machine and setup as above. "Not run" items need a person (or Mod Menu, whi
 | Connected textures: glass, bookshelves, sandstone (Continuity) | **PASS** — base and CTM tiles (`ctm/glass/2-5`, `ctm/bookshelf/1-3`, `ctm/sandstone/2-4`) all stream at 512; bookshelves join seamlessly (`img/ctm-glass-bookshelf-sandstone.jpg`) |
 | Item in hand (diamond sword, Bliss) | **PASS** (`img/item-in-hand.jpg`) |
 | Mod Menu entry (Mod Menu 21.0.0) | **PASS** — icon, `v0.1.0-beta.1+26.3`, by Jayrock09, description, Website/Issues buttons, Source link, LGPL-3.0-only (`img/modmenu-entry.jpg`) |
+
+## Distant glow (emissive blocks at 16 / 48 / 96 / 160 blocks, night, Bliss)
+
+`img/glow-distances.jpg`: emission off (reference) / before / after for each distance. Glow = mean luminance of
+the block above the emission-off shot (control glowstone, which has no LabPBR emission, varies ±5):
+
+| Block | 16 | 48 | 96 | 160 | (before → after) |
+|---|---|---|---|---|---|
+| redstone block | +43 → +52 | +26 → +39 | +32 → +44 | +47 → +44 | |
+| sea lantern | +42 → +42 | +41 → +40 | +20 → +18 | +38 → +33 | |
+| diamond ore | +18 → +16 | +11 → +11 | +17 → +14 | +21 → +19 | |
+| gold ore | +25 → +23 | +5 → +6 | +9 → +11 | +34 → +22 | |
+| emerald ore | +26 → +26 | +3 → +4 | +4 → +5 | +26 → +23 | |
+| redstone ore | +24 → +22 | +2 → +2 | +3 → +4 | +7 → +6 | |
+| crying obsidian / magma | +5…+8 | +5 | +1…+8 | +1…+2 | dim in the pack itself |
+
+- **PASS:** redstone block, sea lantern and the diamond/gold/emerald ores still glow visibly at 160 blocks.
+- **Change:** the 64x base map now gives a texel the average strength of only its emissive pixels (before, the
+  glow was averaged with the surrounding stone). The redstone block's pattern glows clearly brighter at 48–96
+  blocks; it still glows only where its texture does (no whole-block glow); everything else within noise.
+- **Known limit:** sparse ores (redstone ore, emerald/gold to a lesser degree) glow only faintly at 48–96 blocks.
+  That is not in the base map: swapping Iris's specular mip generator for an emission-preserving one made no
+  measurable difference (±1), so it was dropped. It comes from how far-away pixels sample the atlas in Iris/Bliss.

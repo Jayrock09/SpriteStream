@@ -27,6 +27,10 @@ incompatible=$([ "$pack" = stratum2048 ] && echo '["file/Stratum 2048x.zip"]' ||
 sed -i "s|^incompatibleResourcePacks:.*|incompatibleResourcePacks:$incompatible|" run/options.txt
 # Nobody touches the keyboard during a run; the default "afk" limit would cap it at 30 fps.
 sed -i 's|^inactivityFpsLimit:.*|inactivityFpsLimit:"minimized"|' run/options.txt
+# A run must not pause when its window loses focus (the menu would end up in screenshots and frame times).
+sed -i 's|^pauseOnLostFocus:.*|pauseOnLostFocus:false|' run/options.txt
+# RD=<chunks> overrides the render distance (default: Jayden's 10)
+sed -i "s|^renderDistance:.*|renderDistance:${RD:-10}|" run/options.txt
 # BACKEND=vulkan tools/bench.sh ... for the Vulkan backend (default: OpenGL, like Jayden's instance)
 sed -i "s|^preferredGraphicsBackend:.*|preferredGraphicsBackend:\"${BACKEND:-opengl}\"|" run/options.txt
 enable=$([ "$shaders" = on ] && echo true || echo false)
