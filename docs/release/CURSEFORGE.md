@@ -12,7 +12,8 @@ AI-image disclaimer). Nothing has been uploaded.
 | **Class / category** | Mods → Performance (plus Cosmetic if wanted) |
 | **Avatar** | `docs/release/curseforge-avatar.png` (400x400 PNG) |
 | **License** | GNU LGPL 3.0 (`LGPL-3.0-only`, see `COPYING.LESSER`) |
-| **Source / Issues links** | Leave empty while the GitHub repo is private (see "Links" below) |
+| **Source** | https://github.com/Jayrock09/SpriteStream |
+| **Issues** | https://github.com/Jayrock09/SpriteStream/issues |
 
 ## File upload settings
 
@@ -31,28 +32,12 @@ AI-image disclaimer). Nothing has been uploaded.
 All three have Fabric 26.3 files on CurseForge (Sodium 0.9.3-beta.1 / 0.9.2, Continuity 3.0.1+26.3). Iris for
 26.3 is 1.11.x; SpriteStream supports it (shader packs on OpenGL) and Iris 1.12 when it comes out.
 
-## Links — needs Jayden
+## Links
 
-`github.com/Jayrock09/SpriteStream` is **private** (checked 6 Nov 2026), so every link to it is a 404 for
-players. Its visibility has not been changed.
-
-| Where | Link | What players see |
-|---|---|---|
-| `fabric.mod.json` → `contact.homepage` (in the built jar) | `https://github.com/Jayrock09/SpriteStream` | Mod Menu "Website" button → 404 |
-| `fabric.mod.json` → `contact.sources` | same | Mod Menu "Source" link → 404 |
-| `fabric.mod.json` → `contact.issues` | `.../issues` | Mod Menu "Issues" button → 404 |
-| CurseForge project "Source" / "Issues" fields | — | left empty in this page text |
-| `MODRINTH.md` (on hold) | Source line | not published |
-| The description above | none | no GitHub links on purpose |
-
-Pick one before uploading:
-1. **Make the repo public.** Everything works as is; then also fill CurseForge's Source and Issues fields.
-2. **Keep it private.** Remove the three `contact` entries from `fabric.mod.json` (or point `homepage` at the
-   CurseForge page once it exists) and rebuild the jar, so Mod Menu shows no dead buttons; take issue reports
-   through CurseForge comments. Making the repo public later only needs the entries back.
-
-The LGPL does not require a public repository, but it does require that people who get the jar can get the
-source; option 2 means sending the source on request (or attaching it to the CurseForge file).
+**Chosen: the repo is public** (option (a), Jayden, 6 Nov 2026). `github.com/Jayrock09/SpriteStream` and its
+`/issues` page load without signing in, so the `fabric.mod.json` contact links in the built jar (Mod Menu's
+Website, Source and Issues buttons) work as they are; no rebuild was needed. CurseForge's Source and Issues
+fields above point to the same URLs. Public source also covers the LGPL's source requirement.
 
 ---
 
@@ -108,4 +93,6 @@ Connected and random textures (Continuity, OptiFine CTM format) stream like any 
 
 ### Beta
 Tested on an AMD RX 9070 (OpenGL and Vulkan) with Optimum Realism 1024x and Stratum 2048x, without shaders and
-with Bliss. Please report problems with your pack, shader pack and GPU, and include `logs/latest.log`.
+with Bliss. Please report problems with your pack, shader pack and GPU on the
+[issue tracker](https://github.com/Jayrock09/SpriteStream/issues), and include `logs/latest.log`.
+Source code: [github.com/Jayrock09/SpriteStream](https://github.com/Jayrock09/SpriteStream).

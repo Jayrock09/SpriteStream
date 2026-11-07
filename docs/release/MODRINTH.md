@@ -6,7 +6,7 @@
 **Name:** SpriteStream
 **Summary (one line, ≤ 256 chars):** Run 512x–2048x texture packs (LabPBR/POM included) in a fixed VRAM budget. Block textures stay small until they actually cover pixels on screen.
 **Categories:** Optimization, Utility · **Environment:** Client only · **Loader:** Fabric · **Game version:** 26.3
-**License:** LGPL-3.0-only · **Source:** https://github.com/Jayrock09/SpriteStream (repo is private — make it public or drop the link before publishing)
+**License:** LGPL-3.0-only · **Source:** https://github.com/Jayrock09/SpriteStream (public since 6 Nov 2026)
 **Version:** 0.1.0-beta.1+26.3 · **Release channel:** Beta
 **Dependencies:** Sodium (required, 0.9.2+), Iris (optional, 1.11+), Continuity (optional)
 
