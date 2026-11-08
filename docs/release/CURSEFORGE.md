@@ -30,7 +30,9 @@ AI-image disclaimer). Nothing has been uploaded.
 | **Related projects** | **Sodium** (by JellySquid) — Required Dependency · **Iris Shaders** (by coderbot) — Optional Dependency · **Continuity** (by Pepper_Bell) — Optional Dependency |
 
 All three have Fabric 26.3 files on CurseForge (Sodium 0.9.3-beta.1 / 0.9.2, Continuity 3.0.1+26.3). Iris for
-26.3 is 1.11.x; SpriteStream supports it (shader packs on OpenGL) and Iris 1.12 when it comes out.
+26.3 is 1.11.x; SpriteStream supports it (shader packs on OpenGL) and Iris 1.12 when it comes out. Sodium
+0.9.3-beta.4 (7 Nov) declares itself incompatible with Iris ≤ 1.11.7, so shader-pack players need Sodium
+0.9.2 – 0.9.3-beta.3 until a newer Iris is out; the description says so.
 
 ## Links
 
@@ -86,6 +88,10 @@ Connected and random textures (Continuity, OptiFine CTM format) stream like any 
 - **Sodium** 0.9.2 or newer (0.9.x) — required
 - **Iris Shaders** 1.11+ — optional, for shader packs
 - **Continuity** — optional, for connected textures
+
+**Using shader packs?** Pick a Sodium that matches your Iris: Iris 1.11.x (the current release) works with
+Sodium 0.9.2 up to 0.9.3-beta.3; Sodium 0.9.3-beta.4 refuses to start with it. Without Iris, any Sodium 0.9.x
+from 0.9.2 works.
 
 ### Settings
 `config/spritestream.json`:

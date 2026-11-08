@@ -76,6 +76,14 @@ Alpha Piscium.
 | 1.11.x | Vulkan | Iris 1.11 runs no shader packs on Vulkan. In testing (RX 9070) Iris 1.11.7 on Vulkan crashed on the loading screen (`VK_ERROR_DEVICE_LOST`) even with SpriteStream's streaming off, so use OpenGL with Iris 1.11 |
 | older than 1.11, or one whose code changed | any | Turns itself off and logs one line saying why; textures load as without the mod |
 
+**Sodium and Iris versions that work together** (each mod enforces part of this itself):
+
+| Iris | Sodium |
+|---|---|
+| 1.11.3 – 1.11.7 (latest public) | 0.9.2 – 0.9.3-beta.3. Sodium 0.9.3-beta.4 refuses to start with Iris 1.11.7 or older. |
+| 1.12 snapshot (not public) | 0.9.3-beta.1 (tested). With 0.9.3-beta.4 the terrain is corrupted (grid patterns, stretched triangles) whether or not SpriteStream is installed. |
+| none | any 0.9.x from 0.9.2 |
+
 Before the Iris hooks are applied, SpriteStream reads the installed Iris's class files and checks that every
 method it hooks or calls is there, then picks the 1.12 or 1.11 hook set. If neither fits (for example a future
 Iris that changed those internals), it turns itself off instead of crashing the game. It never runs "half on",

@@ -6,9 +6,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 label=$1; pack=$2; shaders=$3; shift 3
 
-# Only one Minecraft at a time on this PC (two GPU users caused VK_ERROR_DEVICE_LOST before).
-if powershell -NoProfile -Command "if (Get-Process java,javaw -ErrorAction SilentlyContinue | Where-Object { \$_.MainWindowTitle -like '*Minecraft*' }) { exit 0 } else { exit 1 }"; then
-	echo "Another Minecraft window is open; not starting." >&2
+# Only one Minecraft at a time on this PC (two GPU users caused VK_ERROR_DEVICE_LOST before). A window title is
+# not enough: a game started from Prism can be loading or titled differently, so look at the Java command lines.
+if powershell -NoProfile -ExecutionPolicy Bypass -File tools/minecraft-running.ps1; then
+	echo "Another Minecraft is running; not starting." >&2
 	exit 2
 fi
 
